@@ -53,14 +53,11 @@ schemes = [
   # File schemes
   "file",
   "tmp",
-  # Display schemes
-  "display*",
   # Other schemes
   "proc",
   "pty",
   "sudo",
   "audio",
-  "orbital",
 ]
 """
 

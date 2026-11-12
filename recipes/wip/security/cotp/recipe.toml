@@ -1,9 +1,0 @@
-#TODO outdated nix crate?
-[source]
-git = "https://github.com/replydev/cotp"
-shallow_clone = true
-[build]
-template = "cargo"
-dependencies = [
-    "libxkbcommon",
-]

@@ -1,9 +1,0 @@
-#TODO sccache server shutdown error causes rust abort because can't catch foreign exceptions
-[source]
-git = "https://github.com/Amjad50/Trapezoid"
-shallow_clone = true
-[build]
-template = "cargo"
-#dependencies = [
- #   "shaderc",
-#]

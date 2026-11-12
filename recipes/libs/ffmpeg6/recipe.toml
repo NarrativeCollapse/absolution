@@ -1,5 +1,5 @@
 [package]
-description = "Tools and libraries for video conversion and playback"
+description = "Command-line tools and libraries for audio and video conversion"
 
 [source]
 tar = "https://ffmpeg.org/releases/ffmpeg-6.1.5.tar.xz"
@@ -11,9 +11,6 @@ patches = [
 [build]
 template = "custom"
 dependencies = [
-    "liborbital",
-    "mesa",
-    "sdl2",
     "zlib",
 ]
 dev-dependencies = [
@@ -23,7 +20,6 @@ compiler = "gcc-no-lto"
 script = """
 DYNAMIC_INIT
 
-export LDFLAGS="$LDFLAGS -lSDL2 -lorbital -lOSMesa"
 ARCH="${TARGET%%-*}"
 COOKBOOK_CONFIGURE_FLAGS=(
     --enable-cross-compile
@@ -35,13 +31,12 @@ COOKBOOK_CONFIGURE_FLAGS=(
     --enable-shared
     --disable-static
     --disable-network
-    --enable-sdl2
+    --disable-sdl2
+    --disable-ffplay
     --enable-zlib
     --enable-pic
     --enable-encoder=png
     --enable-decoder=png
 )
 cookbook_configure
-mkdir -pv "${COOKBOOK_STAGE}/usr/share/ui/apps"
-cp -v "${COOKBOOK_RECIPE}/manifest" "${COOKBOOK_STAGE}/usr/share/ui/apps/ffplay"
 """

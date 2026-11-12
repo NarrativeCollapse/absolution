@@ -11,12 +11,12 @@ CI_COOKBOOK_CONFIG?=CI=1 COOKBOOK_LOGS=true COOKBOOK_CLEAN_BUILD=true COOKBOOK_V
 ci-img: FORCE
 	rm -rf $(IMG_DIR)
 	mkdir -p $(IMG_DIR)
-	$(MAKE) server desktop demo
+	$(MAKE) server minimal
 	cd $(IMG_DIR) && zstd --rm *
 	cd $(IMG_DIR) && sha256sum -b * > SHA256SUM
 
 # The name of the target must match the name of the filesystem config file
-server desktop demo: FORCE
+server minimal: FORCE
 	rm -f "build/$(ARCH)/$@/harddrive.img" "build/$(ARCH)/$@/redox-live.iso"
 	export $(CI_COOKBOOK_CONFIG) REPO_NONSTOP=0 && \
 		$(MAKE) CONFIG_NAME=$@ build/$(ARCH)/$@/harddrive.img build/$(ARCH)/$@/redox-live.iso

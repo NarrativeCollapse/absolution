@@ -1,5 +1,0 @@
-#TODO linking error
-[source]
-tar = "https://ftp.gnu.org/gnu/gnugo/gnugo-3.8.tar.gz"
-[build]
-template = "configure"

@@ -60,8 +60,8 @@ endif
 static_clean: | $(FSTOOLS_TAG)
 	$(MAKE) c.relibc
 	$(MAKE) c.base,extrautils,kernel,redoxfs
-	$(MAKE) c.luajit,gettext,libgcc,libstdcxx,openssl1,openssl3,pcre2,sdl1,zstd,zlib,bzip2,xz
-	$(MAKE) c.expat,freetype2,libffi,libiconv,libjpeg,liborbital,libpng,libxml2,ncurses,ncursesw,termcap
+	$(MAKE) c.luajit,gettext,libgcc,libstdcxx,openssl1,openssl3,pcre2,zstd,zlib,bzip2,xz
+	$(MAKE) c.expat,libffi,libiconv,libjpeg,libpng,libxml2,ncurses,ncursesw,termcap
 	rm -rf $(REPO_TAG)
 
 $(PREFIX)/sysroot: $(PREFIX)/clang-install $(PREFIX)/rust-install $(PREFIX)/gcc-install | $(FSTOOLS_TAG) $(CONTAINER_TAG)

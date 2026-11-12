@@ -4,7 +4,7 @@
 
 # Ensure arch and config are set as desired, we use these to find the build dir
 export ARCH=$(uname -m)
-export CONFIG_NAME=desktop
+export CONFIG_NAME=server
 
 # Make sure to unmount the image first
 make unmount &>/dev/null || true

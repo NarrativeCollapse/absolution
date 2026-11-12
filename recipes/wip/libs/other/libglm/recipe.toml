@@ -1,7 +1,0 @@
-#TODO compiled but untested
-[source]
-git = "https://github.com/g-truc/glm"
-rev = "1.0.3"
-shallow_clone = true
-[build]
-template = "cmake"

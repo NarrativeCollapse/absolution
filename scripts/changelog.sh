@@ -22,7 +22,7 @@ then
     mdlinks=true
 fi
 
-for package in $(installer/target/release/redox_installer --list-packages -c config/$(uname -m)/desktop.toml)
+for package in $(installer/target/release/redox_installer --list-packages -c config/$(uname -m)/ci.toml)
 do
     package_source="$(target/release/repo find ${package})"
     REPOS+=("${package}=${package_source}/source")

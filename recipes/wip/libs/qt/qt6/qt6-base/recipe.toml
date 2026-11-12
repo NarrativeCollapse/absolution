@@ -1,6 +1,0 @@
-#TODO discover minimum dependencies from cmake log
-# cmake build instructions: https://github.com/qt/qtbase/blob/dev/cmake/README.md
-[source]
-tar = "https://download.qt.io/official_releases/qt/6.11/6.11.1/submodules/qtbase-everywhere-src-6.11.1.tar.xz"
-[build]
-template = "cmake"

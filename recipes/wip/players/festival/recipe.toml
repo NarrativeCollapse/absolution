@@ -1,8 +1,0 @@
-#TODO update ahash crate version
-[source]
-git = "https://github.com/hinto-janai/festival"
-shallow_clone = true
-[build]
-template = "cargo"
-cargopackages = ["festival-gui"]
-#dependencies = ["dbus"]

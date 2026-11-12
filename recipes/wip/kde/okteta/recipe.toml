@@ -1,8 +1,0 @@
-#TODO not compiled or tested
-# lacking build instructions
-#TODO missing dependencies
-[source]
-git = "https://invent.kde.org/utilities/okteta"
-rev = "v0.26.27"
-[build]
-template = "cmake"

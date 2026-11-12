@@ -9,8 +9,8 @@ ARCHS=(
     x86_64
 )
 CONFIGS=(
-    demo
-    desktop
+    minimal
+    server
 )
 
 VENTOY="/media/${USER}/Ventoy"

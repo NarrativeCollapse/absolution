@@ -1,9 +1,0 @@
-#TODO fix error after nanorand crate version bump
-[source]
-git = "https://github.com/albedo-engine/albedo"
-shallow_clone = true
-[build]
-template = "cargo"
-cargoexamples = [
-    "gpu_picking"
-]

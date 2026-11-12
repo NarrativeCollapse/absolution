@@ -1,5 +1,0 @@
-#TODO test
-[source]
-tar = "https://invent.kde.org/plasma/plasma-workspace-wallpapers/-/archive/v6.6.6/plasma-workspace-wallpapers-v6.6.6.tar.bz2"
-[build]
-template = "cmake"
