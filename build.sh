@@ -30,7 +30,7 @@ Usage:
                architecture, you must specify the architecture.
                If -f is not specified, FILESYSTEM_CONFIG is set to
                config/ARCH/CONFIG.toml
-    Examples:  ./build.sh -c minimal live - make build/x86_64/minimal/redox-live.iso
+    Examples:  ./build.sh -c minimal live - make build/x86_64/minimal/absolution-live.iso
                ./build.sh -5 qemu - make build/i586/server/harddrive.img and
                                     run it in qemu
     NOTE:      If you do not change ARCH or CONFIG very often, set them in

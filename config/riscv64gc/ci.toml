@@ -1,4 +1,4 @@
-# The Redox build server configuration
+# Every package expected to build, for testing the whole collection
 
 # General settings
 [general]
@@ -9,14 +9,14 @@ prompt = false
 [packages]
 
 # If you need to disable some broken package comment out instead of removal to not increase the maintenance cost
-#TODO: commented out recipes need to be built and tested inside of Redox to verify if they returned to work
+#TODO: commented out recipes need to be built and tested on Absolution to verify if they returned to work
 
 # Meta-packages below
 
 # auto-test = {}
 # dev-essential = {}
-# dev-redox = {}
-# redox-tests = {}
+# dev-absolution = {}
+# absolution-tests = {}
 
 # Normal packages below
 
@@ -93,7 +93,6 @@ zlib = {}
 # #atk = {} # depends on glib which does not build
 # #benchmarks = {}
 # #binutils-gdb = {}
-# #book = {}
 # #cairo-demo = {} # linking errors
 # #classicube = {}
 # #cmake = {}
@@ -118,7 +117,7 @@ zlib = {}
 # #gstreamer = {} # conflict with thread local errno
 # #harfbuzz = {} # depends on glib which does not build
 # #helix = {}
-# #hello-redox = {}
+# #hello-absolution = {}
 # #hematite = {} # needs crate patches for redox-unix
 # #hf = {}
 # #ibm-plex = {}
@@ -186,7 +185,6 @@ zlib = {}
 # #vice = {} # linker errors
 # #vvvvvv = {} # did not compile
 # #webrender = {} # unwind
-# #website = {}
 # #wesnoth = {}
 # #wget = {}
 # autoconf = {}

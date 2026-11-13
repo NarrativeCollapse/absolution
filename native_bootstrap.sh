@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# This script is used to setup the Redox build system
+# This script is used to setup the Absolution build system
 # It installs Rustup, the recipe dependencies for cross-compilation
 # and downloads the build system configuration files
 
@@ -12,13 +12,13 @@ set -e
 banner()
 {
     echo "|------------------------------------------|"
-    echo "|----- Welcome to the Redox bootstrap -----|"
+    echo "|----- Welcome to the Absolution bootstrap -----|"
     echo "|------------------------------------------|"
 }
 
 ############################################################################
 # This function takes care of installing a dependency via package manager of
-# choice for building Redox on BSDs (macOS, FreeBSD, etc.).
+# choice for building Absolution on BSDs (macOS, FreeBSD, etc.).
 # @params:    $1 package manager
 #             $2 package name
 #             $3 binary name (optional)
@@ -84,7 +84,7 @@ osx()
 
 ############################################################################
 # This function takes care of installing all dependencies using MacPorts for
-# building Redox on macOS
+# building Absolution on macOS
 # @params:    $1 the emulator to install, "virtualbox" or "qemu"
 ############################################################################
 osx_macports()
@@ -151,7 +151,7 @@ osx_macports()
 
 ############################################################################
 # This function takes care of installing all dependencies using Homebrew for
-# building Redox on macOS
+# building Absolution on macOS
 # @params:    $1 the emulator to install, "virtualbox" or "qemu"
 ############################################################################
 osx_homebrew()
@@ -215,7 +215,7 @@ osx_homebrew()
 
 #######################################################################
 # This function takes care of installing all dependencies using pkg for
-# building Redox on FreeBSD
+# building Absolution on FreeBSD
 # @params:    $1 the emulator to install, "virtualbox" or "qemu"
 #######################################################################
 freebsd()
@@ -281,7 +281,7 @@ freebsd()
 }
 
 ###############################################################################
-# This function takes care of installing all dependencies for building Redox on
+# This function takes care of installing all dependencies for building Absolution on
 # Arch Linux
 # @params:	$1 the emulator to install, "virtualbox" or "qemu"
 # 		$2 install non-interactively, boolean
@@ -356,7 +356,7 @@ archLinux()
 }
 
 ###############################################################################
-# This function takes care of installing all dependencies for building Redox on
+# This function takes care of installing all dependencies for building Absolution on
 # Debian-based Linux
 # @params:	$1 the emulator to install, "virtualbox" or "qemu"
 # 		$2 install non-interactively, boolean
@@ -487,7 +487,7 @@ ubuntu()
 }
 
 ###############################################################################
-# This function takes care of installing all dependencies for building Redox on
+# This function takes care of installing all dependencies for building Absolution on
 # Fedora Linux
 # @params:	$1 the emulator to install, "virtualbox" or "qemu"
 # 		$2 install non-interactively, boolean
@@ -589,7 +589,7 @@ fedora()
 }
 
 ###############################################################################
-# This function takes care of installing all dependencies for building Redox on
+# This function takes care of installing all dependencies for building Absolution on
 # *SUSE Linux
 ###############################################################################
 suse()
@@ -713,7 +713,7 @@ suse()
 }
 
 ###############################################################################
-# This function takes care of installing all dependencies for building Redox on
+# This function takes care of installing all dependencies for building Absolution on
 # Gentoo Linux
 # @params:	$1 the emulator to install, "virtualbox" or "qemu"
 ###############################################################################
@@ -765,7 +765,7 @@ gentoo()
 }
 
 ###############################################################################
-# This function takes care of installing all dependencies for building Redox on
+# This function takes care of installing all dependencies for building Absolution on
 # Solus
 # @params:	$1 the emulator to install, "virtualbox" or "qemu"
 ###############################################################################
@@ -823,22 +823,23 @@ solus()
 }
 
 ###############################################################################
-# Helper function to detect if we're running on Redox OS
+# Helper function to detect if we're running on Absolution
 # This needs to be checked before FreeBSD since both use 'pkg' package manager
 ###############################################################################
-is_os_redox()
+is_self_hosted()
 {
+    # The kernel still reports its original name.
     [ "$(uname -s)" = "Redox" ]
 }
 
 ###############################################################################
-# This function takes care of installing all dependencies for building Redox on
-# Redox OS itself (bootstrapping Redox on Redox)
+# This function takes care of installing all dependencies for building Absolution on
+# Absolution itself (bootstrapping Absolution on Absolution)
 # @params:    $1 the emulator to install, "virtualbox" or "qemu"
 ###############################################################################
-redox()
+self_hosted()
 {
-    echo "Detected Redox OS"
+    echo "Detected Absolution"
     
     # Check if git is installed
     if [ -z "$(command -v git)" ]; then
@@ -848,11 +849,11 @@ redox()
 
     # Handle emulator selection
     if [ "$1" = "qemu" ]; then
-        echo "QEMU is not available on Redox OS yet, but it is mandatory for running the built system."
+        echo "QEMU is not available on Absolution yet, but it is mandatory for running the built system."
         echo "Please install QEMU manually on a compatible host or use another machine to run the emulator."
         exit 1
     elif [ "$1" = "virtualbox" ]; then
-        echo "VirtualBox is not supported on Redox OS."
+        echo "VirtualBox is not supported on Absolution."
         exit 1
     else
         echo "Unknown emulator: $1"
@@ -861,7 +862,7 @@ redox()
 
     echo "Installing necessary build tools..."
     
-    # Core development packages that are available on x86_64 Redox
+    # Core development packages that are available on x86_64 Absolution
     # This list is based on list of "cookbook" and "dev-essential" recipe
     packages="autoconf \
     automake \
@@ -889,7 +890,7 @@ redox()
 
     
     # Try to install packages, but don't fail if some are unavailable
-    # since Redox package ecosystem is still developing
+    # since Absolution package ecosystem is still developing
     for pkg in $PKGS; do
         if ! pkg list | grep -q "^${pkg}"; then
             echo "Attempting to install ${pkg}..."
@@ -902,8 +903,8 @@ redox()
     done
     
     echo ""
-    echo "Note: Building Redox on Redox itself is experimental."
-    echo "Some dependencies may not be available yet in the Redox package repository."
+    echo "Note: Building Absolution on Absolution itself is experimental."
+    echo "Some dependencies may not be available yet in the Absolution package repository."
     echo "For the best build experience, consider using podman_bootstrap.sh on another system."
 }
 
@@ -913,7 +914,7 @@ redox()
 usage()
 {
     echo "------------------------"
-    echo "|Redox bootstrap script|"
+    echo "|Absolution bootstrap script|"
     echo "------------------------"
     echo "Usage: ./native_bootstrap.sh"
     echo "OPTIONS:"
@@ -940,8 +941,8 @@ usage()
 #############################################################
 cargoInstall()
 {
-    if is_os_redox ; then
-        # in redox OS, cargo is not based on rustup. Packages are managed by pkg
+    if is_self_hosted ; then
+        # in Absolution, cargo is not based on rustup. Packages are managed by pkg
         return 0
     fi
     case "$(cargo +stable install --list)" in
@@ -958,8 +959,8 @@ cargoInstall()
 #############################################################################
 rustInstall()
 {
-    if is_os_redox ; then
-        # in redox OS, rustup is not available. Packages are managed by pkg
+    if is_self_hosted ; then
+        # in Absolution, rustup is not available. Packages are managed by pkg
         return 0
     fi
     noninteractive=$1
@@ -1022,9 +1023,9 @@ rustInstall()
 boot()
 {
     echo "Cloning gitlab repo..."
-    git clone https://gitlab.redox-os.org/redox-os/redox.git --origin upstream
+    git clone https://github.com/NarrativeCollapse/absolution.git
     echo "Creating .config with PODMAN_BUILD=0"
-    echo 'PODMAN_BUILD?=0' > redox/.config
+    echo 'PODMAN_BUILD?=0' > absolution/.config
     echo "Cleaning up..."
     rm native_bootstrap.sh
     echo
@@ -1035,8 +1036,8 @@ boot()
     echo "** Be sure to update your path to include Rust - run the following command: **"
     echo '. "$HOME/.cargo/env"'
     echo
-    echo "Run the following commands to build Redox:"
-    echo "cd redox"
+    echo "Run the following commands to build Absolution:"
+    echo "cd absolution"
     MAKE="make"
     if [ "$(uname)" = "FreeBSD" ]; then
         MAKE="gmake"
@@ -1082,7 +1083,7 @@ banner
 if [ "Darwin" = "$(uname -s)" ]; then
     echo "Detected macOS!"
 
-    echo "WARNING: Building Redox OS on MacOS is not recommended, please use podman_bootstrap.sh instead."
+    echo "WARNING: Building Absolution on MacOS is not recommended, please use podman_bootstrap.sh instead."
     echo "WARNING: Our toolchain is not designed to work on MacOS and it relies on FUSE which requires kernel extensions."
     echo "WARNING: If you want to continue anyway, please wait for 3 seconds or cancel this script now!"
     sleep 3
@@ -1100,9 +1101,9 @@ if [ "Darwin" = "$(uname -s)" ]; then
 else
     # Here we will use package managers to determine which operating system the user is using.
 
-    # Redox OS
-    if is_os_redox; then
-        redox "$emulator"
+    # Absolution
+    if is_self_hosted; then
+        self_hosted "$emulator"
     # SUSE and derivatives
     elif hash 2>/dev/null zypper; then
         suse "$emulator"
@@ -1137,4 +1138,4 @@ if [ "$dependenciesonly" = false ]; then
     boot
 fi
 
-echo "Redox bootstrap complete!"
+echo "Absolution bootstrap complete!"

@@ -18,8 +18,8 @@ for ARCH in $ARCHS
 do
     for CONFIG_NAME in $CONFIGS
     do
-        IMAGE="build/${ARCH}/${CONFIG_NAME}/redox-live.iso"
-        DEST="${VENTOY}/redox-${CONFIG_NAME}-${ARCH}.iso"
+        IMAGE="build/${ARCH}/${CONFIG_NAME}/absolution-live.iso"
+        DEST="${VENTOY}/absolution-${CONFIG_NAME}-${ARCH}.iso"
         make ARCH="${ARCH}" CONFIG_NAME="${CONFIG_NAME}" "${IMAGE}"
         echo "Copying ${IMAGE} to ${DEST}"
         cp "${IMAGE}" "${DEST}"

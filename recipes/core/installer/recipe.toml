@@ -1,5 +1,5 @@
 [package]
-description = "Builds a bootable Redox image"
+description = "Builds a bootable Absolution image"
 
 [source]
 git = "https://gitlab.redox-os.org/redox-os/installer.git"

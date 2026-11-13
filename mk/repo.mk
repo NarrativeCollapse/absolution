@@ -406,11 +406,11 @@ ifeq ($(PODMAN_BUILD),1)
 		export BIN_PATH=$$(find $$RECIPE_STAGE -type f -name "$(DEBUG_BIN)" -or -type f -name "$*") && \
 		file $$BIN_PATH 2> /dev/null || ( echo "Binary is not found, please set DEBUG_BIN" && exit 1 ) && \
 		echo "Opening gdbgui for debugging $* with binary '$$BIN_PATH'" && echo "----------" && \
-		podman build -t redox-kernel-debug - < $(ROOT)/podman/redox-gdb-containerfile > /dev/null && \
-		podman run --rm -p 5000:5000 -it --name redox-gdb \
+		podman build -t absolution-kernel-debug - < $(ROOT)/podman/absolution-gdb-containerfile > /dev/null && \
+		podman run --rm -p 5000:5000 -it --name absolution-gdb \
 		-v "./$$BIN_PATH:/binary" \
 		-v "./source:/source" -w "/source" \
-		redox-kernel-debug --gdb-cmd "gdb -ex 'set confirm off' \
+		absolution-kernel-debug --gdb-cmd "gdb -ex 'set confirm off' \
 			-ex 'add-symbol-file /binary' \
 			-ex 'target remote host.containers.internal:1234'"
 else

@@ -1,5 +1,5 @@
 {
-  description = "The Nix-flake for Redox development on NixOS";
+  description = "The Nix-flake for Absolution development on NixOS";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -37,7 +37,7 @@
     {
       formatter = forAllSystems (pkgs: pkgs.nixfmt-tree);
 
-      # TODO: Create Redox OS Image as package
+      # TODO: Create Absolution Image as package
       # TODO: No cross-compile for now, as there is no pkgsCross.aarch64-unknown-redox and so on
       # TODO: Get rid of make env step: package custom libtool and setup rust toolchain properly
       devShells = forAllSystems (pkgs: {
@@ -97,7 +97,7 @@
             shellHook = ''
               # Install required configuration
               ${podmanSetupScript}
-              echo "Redox podman build environment loaded"
+              echo "Absolution podman build environment loaded"
             '';
           };
 

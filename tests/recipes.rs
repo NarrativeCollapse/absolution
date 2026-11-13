@@ -294,3 +294,33 @@ fn server_group_matches_server_image() {
         "recipes/groups/server must list the packages of config/minimal.toml and config/server.toml"
     );
 }
+
+#[test]
+fn supported_recipe_descriptions_use_this_os_name() {
+    let offenders: Vec<String> = recipe_files()
+        .into_iter()
+        .filter(|(_, path)| !is_wip(path))
+        .filter_map(|(name, path)| {
+            let description = Recipe::load(&path).ok()?.package.description?;
+            // RedoxFS and relibc are component names, not the OS name.
+            let os_name = description.replace("RedoxFS", "");
+            os_name
+                .contains("Redox")
+                .then(|| format!("{name}: {description}"))
+        })
+        .collect();
+    assert!(offenders.is_empty(), "{}", offenders.join("\n"));
+}
+
+#[test]
+fn installed_system_identifies_as_absolution() {
+    let base = std::fs::read_to_string(tree_root().join("config/base.toml")).unwrap();
+    assert!(base.contains("NAME=\"Absolution\""));
+    assert!(base.contains("ID=\"absolution\""));
+    // Installed systems must not fetch packages from another OS's server.
+    assert!(
+        !base.contains("/etc/pkg.d/"),
+        "base.toml configures a package server"
+    );
+    assert!(!base.to_lowercase().contains("redox-os.org"));
+}

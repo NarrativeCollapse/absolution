@@ -25,9 +25,9 @@ use crate::cook::{
 use crate::{
     Error, Result, bail_other_err,
     config::{get_config, translate_mirror},
-    is_redox, log_to_pty,
+    log_to_pty,
     recipe::{BuildKind, CookRecipe, RecipeRule, SourceRecipe},
-    wrap_io_err,
+    self_hosted, wrap_io_err,
 };
 
 /// How many `same_as` hops are followed before assuming a cycle.
@@ -373,7 +373,7 @@ impl GitFetch<'_> {
         }
         command.arg(&source_dir_tmp);
         if let Err(e) = run_command(command, self.logger) {
-            if !is_redox() {
+            if !self_hosted() {
                 return Err(e);
             }
             // RedoxFS has a race when `--recursive` clones run on several
@@ -470,7 +470,7 @@ impl GitFetch<'_> {
         let mut command = self.git();
         command.args(["submodule", "sync", "--recursive"]);
         if let Err(e) = run_command(command, self.logger) {
-            if !is_redox() {
+            if !self_hosted() {
                 return Err(e);
             }
             self.submodules_one_by_one(&self.source_dir, &["sync"])?;
@@ -483,7 +483,7 @@ impl GitFetch<'_> {
             .args(&update_args)
             .arg("--recursive");
         if let Err(e) = run_command(command, self.logger) {
-            if !is_redox() {
+            if !self_hosted() {
                 return Err(e);
             }
             self.submodules_one_by_one(&self.source_dir, &update_args)?;
@@ -708,8 +708,8 @@ pub(crate) fn fetch_extract_tar(source_tar: &Path, dest: &Path, logger: &PtyOut)
     create_dir_clean(&staging)?;
 
     // `o`: files belong to whoever runs tar, even when that is root.
-    // Redox's tar does not know `o`; it never restores owners anyway.
-    let keys = match (is_redox(), verbose) {
+    // Absolution's tar does not know `o`; it never restores owners anyway.
+    let keys = match (self_hosted(), verbose) {
         (true, true) => "xvf",
         (true, false) => "xf",
         (false, true) => "xovf",

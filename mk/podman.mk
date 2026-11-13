@@ -2,9 +2,9 @@
 
 # Configuration variables for running make in Podman
 ## Tag the podman image $IMAGE_TAG
-IMAGE_TAG?=redox-base
+IMAGE_TAG?=absolution-base
 ## Working Directory in Podman
-CONTAINER_WORKDIR?=/mnt/redox
+CONTAINER_WORKDIR?=/mnt/absolution
 
 ## Flag passed to the Podman volumes. :Z can be used only with SELinux
 USE_SELINUX?=1
@@ -14,11 +14,12 @@ else
 PODMAN_VOLUME_FLAG=
 endif
 
-# Cache layers to redox-os docker hub
+# Optionally reuse image layers from a registry, e.g.
+# PODMAN_CACHE_PATH=registry.example.com/$(IMAGE_TAG)-$(HOST_ARCH)
 PODMAN_CACHE=
-PODMAN_CACHE_PATH?=docker.io/redoxos/$(IMAGE_TAG)-$(HOST_ARCH)
+PODMAN_CACHE_PATH?=
 
-PODMAN_CACHE_PULL?=1
+PODMAN_CACHE_PULL?=0
 ifeq ($(PODMAN_CACHE_PULL),1)
 PODMAN_CACHE+=--cache-from=$(PODMAN_CACHE_PATH)
 endif
@@ -36,7 +37,7 @@ PODMAN_ENV=--env PATH=/root/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:
 PODMAN_CONFIG=--env ARCH=$(ARCH) --env BOARD=$(BOARD) --env CONFIG_NAME=$(CONFIG_NAME) --env FILESYSTEM_CONFIG=$(FILESYSTEM_CONFIG) --env PREFIX_BINARY=$(PREFIX_BINARY) \
                --env CI=$(CI) --env COOKBOOK_MAKE_JOBS=$(COOKBOOK_MAKE_JOBS) --env COOKBOOK_LOGS=$(COOKBOOK_LOGS) --env COOKBOOK_VERBOSE=$(COOKBOOK_VERBOSE) --env COOKBOOK_COMPRESSED=$(COOKBOOK_COMPRESSED) \
                --env REPO_APPSTREAM=$(REPO_APPSTREAM) --env REPO_BINARY=$(REPO_BINARY) --env REPO_NONSTOP=$(REPO_NONSTOP) --env REPO_OFFLINE=$(REPO_OFFLINE) --env TESTBIN=$(TESTBIN) \
-               --env HOSTED_REDOX=$(HOSTED_REDOX) --env PREFIX_USE_UPSTREAM_RUST_COMPILER=$(PREFIX_USE_UPSTREAM_RUST_COMPILER) --env COOKBOOK_CLEAN_TARGET=$(COOKBOOK_CLEAN_TARGET)
+               --env SELF_HOSTED=$(SELF_HOSTED) --env PREFIX_USE_UPSTREAM_RUST_COMPILER=$(PREFIX_USE_UPSTREAM_RUST_COMPILER) --env COOKBOOK_CLEAN_TARGET=$(COOKBOOK_CLEAN_TARGET)
 PODMAN_OPTIONS=--rm --workdir $(CONTAINER_WORKDIR) --interactive --tty --cap-add SYS_ADMIN --device /dev/fuse --network=host --env TERM=$(TERM) --pids-limit=-1
 PODMAN_RUN=podman run $(PODMAN_OPTIONS) $(PODMAN_VOLUMES) $(PODMAN_ENV) $(PODMAN_CONFIG) $(IMAGE_TAG)
 
@@ -92,10 +93,10 @@ KERNEL_PATH_TARGET := $(ROOT)/$(KERNEL_PATH)/target/$(TARGET)
 # TODO: make this work using `make debug.kernel` and remove this
 kernel_debugger:
 	@echo "Building and running gdbgui container..."
-	podman build -t redox-kernel-debug - < $(ROOT)/podman/redox-gdb-containerfile
-	podman run --rm -p 5000:5000 -it --name redox-gdb \
+	podman build -t absolution-kernel-debug - < $(ROOT)/podman/absolution-gdb-containerfile
+	podman run --rm -p 5000:5000 -it --name absolution-gdb \
 		-v "$(KERNEL_PATH_TARGET)/build/kernel.sym:/kernel.sym" \
 		-v "$(KERNEL_PATH_SOURCE)/src:/src" \
-		redox-kernel-debug --gdb-cmd "gdb -ex 'set confirm off' \
+		absolution-kernel-debug --gdb-cmd "gdb -ex 'set confirm off' \
 			-ex 'add-symbol-file /kernel.sym' \
 			-ex 'target remote host.containers.internal:1234'"

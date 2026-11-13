@@ -1,5 +1,5 @@
 [package]
-description = "Test suites for POSIX compliance (this variant run and get the Redox results from Linux)"
+description = "Test suites for POSIX compliance (this variant runs them and collects the results from Linux)"
 
 [source]
 same_as = "../os-test"
@@ -46,13 +46,13 @@ make OS=${OS} CC="${CC}" CFLAGS="${CFLAGS}" CPPFLAGS= \
         LDFLAGS_FOR_BUILD= -j ${COOKBOOK_MAKE_JOBS} all
 
 skips=(
-    # Skip hanging tests on Linux/Redox with relibc
+    # Skip hanging tests on Linux or Absolution with relibc
     basic/stdio/putc_unlocked
 )
 
 if [ "$OS" = "Redox" ]; then
 skips+=(
-    # Skip hanging tests on Redox with relibc
+    # Skip hanging tests on Absolution with relibc
     # https://gitlab.redox-os.org/redox-os/redox/-/issues/1752
     basic/sys_socket/accept
     basic/sys_socket/recv

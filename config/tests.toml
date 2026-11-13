@@ -11,5 +11,5 @@ prompt = false
 
 # Package settings
 [packages]
-redox-tests = {}
+absolution-tests = {}
 benchmarks = {}

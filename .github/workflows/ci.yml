@@ -45,11 +45,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Standalone scripts must run under any POSIX sh. Recipe build scripts
-      # are bash by design and are not checked here.
+      # The build system's own scripts must run under any POSIX sh. Files
+      # under recipes/ belong to the packages (some are vendored from other
+      # projects), and recipe build scripts are bash by design.
       - name: Check scripts
         run: |
-          scripts=$(git ls-files '*.sh' 'bin/*-pkg-config' | grep -v '^recipes/wip/')
+          scripts=$(git ls-files '*.sh' 'bin/*-pkg-config' | grep -v '^recipes/')
           for f in $scripts; do
             head -n 1 "$f" | grep -qx '#!/bin/sh' || { echo "$f: interpreter must be /bin/sh"; exit 1; }
             dash -n "$f"

@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::{Error, Result, is_redox};
+use crate::{Error, Result, self_hosted};
 
 const LOCAL_BUILD: &str = "target/release/cookbook_redoxer";
 
@@ -16,7 +16,7 @@ pub fn cookbook_redoxer() -> Result<PathBuf> {
             .canonicalize()
             .map_err(crate::wrap_io_err!(local, "Resolving path"));
     }
-    if is_redox() {
+    if self_hosted() {
         return Ok(PathBuf::from("cookbook_redoxer"));
     }
     Err(Error::Other(format!(

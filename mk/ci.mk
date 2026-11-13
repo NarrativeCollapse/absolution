@@ -17,12 +17,12 @@ ci-img: FORCE
 
 # The name of the target must match the name of the filesystem config file
 server minimal: FORCE
-	rm -f "build/$(ARCH)/$@/harddrive.img" "build/$(ARCH)/$@/redox-live.iso"
+	rm -f "build/$(ARCH)/$@/harddrive.img" "build/$(ARCH)/$@/absolution-live.iso"
 	export $(CI_COOKBOOK_CONFIG) REPO_NONSTOP=0 && \
-		$(MAKE) CONFIG_NAME=$@ build/$(ARCH)/$@/harddrive.img build/$(ARCH)/$@/redox-live.iso
+		$(MAKE) CONFIG_NAME=$@ build/$(ARCH)/$@/harddrive.img build/$(ARCH)/$@/absolution-live.iso
 	mkdir -p $(IMG_DIR)
-	cp "build/$(ARCH)/$@/harddrive.img" "$(IMG_DIR)/redox_$(@)$(IMG_SEPARATOR)$(IMG_TAG)_harddrive.img"
-	cp "build/$(ARCH)/$@/redox-live.iso" "$(IMG_DIR)/redox_$(@)$(IMG_SEPARATOR)$(IMG_TAG)_livedisk.iso"
+	cp "build/$(ARCH)/$@/harddrive.img" "$(IMG_DIR)/absolution_$(@)$(IMG_SEPARATOR)$(IMG_TAG)_harddrive.img"
+	cp "build/$(ARCH)/$@/absolution-live.iso" "$(IMG_DIR)/absolution_$(@)$(IMG_SEPARATOR)$(IMG_TAG)_livedisk.iso"
 
 ci-os-test: FORCE
 	make CONFIG_NAME=os-test unmount

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# This script allow the user to copy a Rust backtrace from Redox
+# This script allow the user to copy a Rust backtrace from Absolution
 # and retrieve the symbols
 
 usage()

@@ -1,5 +1,5 @@
 [package]
-description = "Redox POSIX/C Standard Library"
+description = "POSIX/C standard library (relibc)"
 
 [source]
 git = "https://gitlab.redox-os.org/redox-os/relibc.git"

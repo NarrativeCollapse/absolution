@@ -1,5 +1,5 @@
 #!/bin/sh
-# Host setup for `make ch net=tap`: tap redox0, IPv4 forwarding, firewalld NAT
+# Host setup for `make ch net=tap`: tap absolution0, IPv4 forwarding, firewalld NAT
 # and dnsmasq DHCP/DNS. Needs firewalld and dnsmasq. Re-run after a reboot.
 # As root without sudo, set TAP_USER=<user>.
 
@@ -8,7 +8,7 @@ set -eu
 # Debian does not put the sbin directories in a normal user's PATH.
 PATH="${PATH}:/usr/local/sbin:/usr/sbin:/sbin"
 
-TAP=redox0
+TAP=absolution0
 GUEST_MAC=52:54:00:12:34:56
 TAP_ADDR=192.168.249.1
 TAP_CIDR="${TAP_ADDR}/24"
@@ -17,8 +17,8 @@ DHCP_LAST=192.168.249.50
 DHCP_RANGE="${DHCP_FIRST},${DHCP_LAST},255.255.255.0,12h"
 ZONE=chnet
 POLICY=chnet-nat
-SYSCTL_DROPIN=/etc/sysctl.d/90-redox-tap.conf
-DNSMASQ_PID=/run/redox0-dnsmasq.pid
+SYSCTL_DROPIN=/etc/sysctl.d/90-absolution-tap.conf
+DNSMASQ_PID=/run/absolution0-dnsmasq.pid
 WAIT_TIMEOUT=3 # seconds
 IS_ROOT=0
 [ "$(id -u)" -eq 0 ] && IS_ROOT=1
@@ -135,7 +135,7 @@ dnsmasq_pids() {
     pgrep -f "(^|/)dnsmasq .*--interface=${TAP}( |$)" || true
 }
 
-# dnsmasq binds DHCP to 0.0.0.0%redox0:67 but DNS to 192.168.249.1:53.
+# dnsmasq binds DHCP to 0.0.0.0%absolution0:67 but DNS to 192.168.249.1:53.
 dhcp_listening() {
     ss -H -uln | awk -v t="${TAP}" '$4 ~ ("%" t ":67$") { f = 1 } END { exit !f }'
 }
@@ -354,9 +354,9 @@ run_checks() {
 print_summary() {
     echo
     echo "${TAP} is ready. It shows NO-CARRIER until cloud-hypervisor opens it; that is normal."
-    echo "Start Redox with 'make ch net=tap'. It adds:"
+    echo "Start Absolution with 'make ch net=tap'. It adds:"
     echo "  --net tap=${TAP},mac=${GUEST_MAC},offload_tso=off,offload_ufo=off,offload_csum=off"
-    echo "Then optionally run 'dhcpd -v' in Redox and watch leases happen on the host with 'journalctl -t dnsmasq-dhcp -f'."
+    echo "Then optionally run 'dhcpd -v' in Absolution and watch leases happen on the host with 'journalctl -t dnsmasq-dhcp -f'."
 }
 
 main() {

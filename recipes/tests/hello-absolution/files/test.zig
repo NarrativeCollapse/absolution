@@ -1,5 +1,5 @@
 const std = @import("std");
 
 pub fn main() !void {
-    std.debug.print("Hello, Redox!\n", .{});
+    std.debug.print("Hello, Absolution!\n", .{});
 }

@@ -16,7 +16,7 @@ mkdir -p "${COOKBOOK_STAGE}/home/user/os-test"
 cd "${COOKBOOK_STAGE}/home/user/os-test"
 rsync -a "${COOKBOOK_SOURCE}/" "./"
 
-# Pre-compile tests for Redox
+# Pre-compile tests for Absolution (os-test calls the OS "Redox")
 make OS=Redox \
     CC="${CC_WRAPPER} ${GNU_TARGET}-gcc" \
     CFLAGS="-I${COOKBOOK_SYSROOT}/include" \

@@ -1,7 +1,7 @@
 [package]
 description = "FreeDesktop common MIME database"
 
-# This does not build update-mime-database to avoid bringing in C code to Redox
+# This does not build update-mime-database to avoid bringing in C code
 [source]
 tar = "https://gitlab.freedesktop.org/xdg/shared-mime-info/-/archive/2.4/shared-mime-info-2.4.tar.gz"
 blake3 = "ad130f2f923ab3d5455c643e6257abf3598339fdd134ad0fac4e5dbbbf070eb9"

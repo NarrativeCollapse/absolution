@@ -1,7 +1,7 @@
 # Configuration file for QEMU
 
 QEMU?=qemu-system-$(QEMU_ARCH)
-QEMUFLAGS?=-d guest_errors -name "Redox OS $(ARCH)"
+QEMUFLAGS?=-d guest_errors -name "Absolution $(ARCH)"
 netboot?=no
 redoxer?=no
 VGA_SUPPORTED=no
@@ -142,7 +142,7 @@ endif
 # wsl2: run qemu on windows instead
 ifeq ($(QEMU_ON_WINDOWS),1)
 	QEMU:=$(QEMU).exe
-	WINDOWS_DISK=/mnt/c/ProgramData/redox.img
+	WINDOWS_DISK=/mnt/c/ProgramData/absolution.img
 	disk=windows
 	net=windows
 	QEMU_MACHINE=pc
@@ -160,7 +160,7 @@ ifneq ($(QEMU_KERNEL),)
 endif
 
 ifeq ($(live),yes)
-	DISK=$(BUILD)/redox-live.iso
+	DISK=$(BUILD)/absolution-live.iso
 else
 	DISK=$(BUILD)/harddrive.img
 endif
@@ -228,7 +228,7 @@ else
 
 	EXTRANETARGS=
 	ifeq ($(netboot),yes)
-		EXTRANETARGS+=,tftp=$(BUILD),bootfile=redox.ipxe
+		EXTRANETARGS+=,tftp=$(BUILD),bootfile=absolution.ipxe
 		QEMUFLAGS+=-kernel /usr/lib/ipxe/ipxe-amd64.efi
 	endif
 

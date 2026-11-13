@@ -1,4 +1,4 @@
-# Configuration file with the commands configuration of the Redox image
+# Configuration file with the commands configuration of the Absolution image
 
 $(BUILD)/harddrive.img: $(FSTOOLS) $(REPO_TAG)
 ifeq ($(FSTOOLS_IN_PODMAN),1)
@@ -17,7 +17,7 @@ else
 	mv $@.partial $@
 endif
 
-$(BUILD)/redox-live.iso: $(FSTOOLS) $(REPO_TAG) redox.ipxe
+$(BUILD)/absolution-live.iso: $(FSTOOLS) $(REPO_TAG) absolution.ipxe
 ifeq ($(FSTOOLS_IN_PODMAN),1)
 	$(PODMAN_RUN) make $@
 else
@@ -31,7 +31,7 @@ else
 	dd if=/dev/null of=$@.partial bs=1048576 seek="$$FILESYSTEM_SIZE" count=0 2>/dev/null
 	umask 022 && $(INSTALLER) $(INSTALLER_OPTS) -c $(FILESYSTEM_CONFIG) --write-bootloader="$(BUILD)/bootloader-live.efi" --live $@.partial
 	mv $@.partial $@
-	cp redox.ipxe $(BUILD)/redox.ipxe
+	cp absolution.ipxe $(BUILD)/absolution.ipxe
 endif
 
 $(BUILD)/filesystem.img: $(FSTOOLS) $(REPO_TAG)
@@ -84,9 +84,9 @@ ifeq ($(FSTOOLS_IN_PODMAN),1)
 	$(PODMAN_RUN) make $@
 else
 	@mkdir -p $(MOUNT_DIR)
-	$(REDOXFS) $(BUILD)/redox-live.iso $(MOUNT_DIR)
+	$(REDOXFS) $(BUILD)/absolution-live.iso $(MOUNT_DIR)
 	@sleep 2
-	@echo "\033[1;36;49mredox-live.iso mounted ($$(pgrep redoxfs))\033[0m"
+	@echo "\033[1;36;49mabsolution-live.iso mounted ($$(pgrep redoxfs))\033[0m"
 endif
 
 unmount: FORCE

@@ -44,7 +44,7 @@ impl CliWebConfig {
                     .unwrap_or("web".to_string()),
             ),
             // TODO: Hardcoded URL, maybe get this remote-url next time
-            this_repo: "https://gitlab.redox-os.org/redox-os/redox".to_string(),
+            this_repo: "https://github.com/NarrativeCollapse/absolution".to_string(),
         })
     }
 }

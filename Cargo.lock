@@ -3,6 +3,33 @@
 version = 4
 
 [[package]]
+name = "absolution_cookbook"
+version = "0.1.0"
+dependencies = [
+ "ansi-to-tui",
+ "blake3",
+ "globset",
+ "ignore",
+ "libc",
+ "object",
+ "pkgar",
+ "pkgar-core",
+ "pkgar-keys",
+ "ratatui",
+ "redox-pkg",
+ "redox_installer",
+ "redoxer",
+ "regex",
+ "serde",
+ "serde_json",
+ "strip-ansi-escapes",
+ "tempfile",
+ "termion",
+ "toml",
+ "walkdir",
+]
+
+[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -963,33 +990,6 @@ dependencies = [
  "serde_derive",
  "thiserror",
  "toml",
-]
-
-[[package]]
-name = "redox_cookbook"
-version = "0.1.0"
-dependencies = [
- "ansi-to-tui",
- "blake3",
- "globset",
- "ignore",
- "libc",
- "object",
- "pkgar",
- "pkgar-core",
- "pkgar-keys",
- "ratatui",
- "redox-pkg",
- "redox_installer",
- "redoxer",
- "regex",
- "serde",
- "serde_json",
- "strip-ansi-escapes",
- "tempfile",
- "termion",
- "toml",
- "walkdir",
 ]
 
 [[package]]

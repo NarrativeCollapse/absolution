@@ -16,8 +16,8 @@
 # CH_REMOTE or CH_FIRMWARE to use other files, e.g. CH=cloud-hypervisor for
 # the one in PATH.
 #
-# The serial console puts this terminal in raw mode, so Ctrl-C goes to Redox.
-# Redox cannot power off Cloud Hypervisor by itself yet: use make ch-shutdown.
+# The serial console puts this terminal in raw mode, so Ctrl-C goes to Absolution.
+# Absolution cannot power off Cloud Hypervisor by itself yet: use make ch-shutdown.
 #
 # The network is passt by default: a user-mode network stack, started by
 # scripts/passt-run.sh, that answers the guest's DHCP and DNS and carries its
@@ -25,7 +25,7 @@
 # needed. The guest gets the host's address, and nothing reaches it from
 # outside unless forwarded. CH_PASST_FLAGS passes options to passt, e.g.
 # "-t 8022:22" (host port 8022 to guest port 22) or
-# "--pcap $XDG_RUNTIME_DIR/redox.pcap" (capture the traffic).
+# "--pcap $XDG_RUNTIME_DIR/absolution.pcap" (capture the traffic).
 #
 # net=tap uses the tap device $(CH_TAP) instead: a real link that the host
 # can reach on any port and watch with tcpdump. Creating it needs root:
@@ -65,10 +65,10 @@ CH_SMP?=4
 CH_MEM?=2048
 CH_API_SOCK?=$(BUILD)/ch.sock
 CH_LOG?=$(BUILD)/ch.log
-CH_TAP?=redox0
+CH_TAP?=absolution0
 CH_MAC?=52:54:00:12:34:56
 # Not in $(BUILD): SELinux limits passt to $XDG_RUNTIME_DIR and /tmp.
-CH_PASST_SOCK?=$(or $(XDG_RUNTIME_DIR),/tmp)/redox-passt-$(ARCH)-$(CONFIG_NAME).sock
+CH_PASST_SOCK?=$(or $(XDG_RUNTIME_DIR),/tmp)/absolution-passt-$(ARCH)-$(CONFIG_NAME).sock
 CH_PASST_FLAGS?=
 CHFLAGS?=-v --log-file $(CH_LOG)
 
@@ -83,7 +83,7 @@ CHFLAGS+= \
 PASST_RUN=
 
 ifeq ($(net),tap)
-	# The Redox virtio-net driver only acknowledges VIRTIO_NET_F_MAC at the moment.
+	# The Absolution virtio-net driver only acknowledges VIRTIO_NET_F_MAC at the moment.
 	CHFLAGS+=--net tap=$(CH_TAP),mac=$(CH_MAC),offload_tso=off,offload_ufo=off,offload_csum=off
 else ifneq ($(net),no)
 	CHFLAGS+=--net vhost_user=true,socket=$(CH_PASST_SOCK),mac=$(CH_MAC)

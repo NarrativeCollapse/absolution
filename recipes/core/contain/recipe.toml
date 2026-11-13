@@ -1,5 +1,5 @@
 [package]
-description = "Containers and chroots for Redox"
+description = "Containers and chroots"
 
 [source]
 git = "https://gitlab.redox-os.org/redox-os/contain.git"

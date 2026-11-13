@@ -1,5 +1,5 @@
 [package]
-description = "Official filesystem of the Redox project"
+description = "Default filesystem (RedoxFS)"
 
 [source]
 git = "https://gitlab.redox-os.org/redox-os/redoxfs.git"

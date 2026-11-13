@@ -1,7 +1,7 @@
 [package]
 dependencies = [
     "dev-essential",
-    "redox-tests",
+    "absolution-tests",
     "exampled",
     "gdbserver",
     "libgmp",
@@ -16,4 +16,4 @@ dependencies = [
     "xz",
     "zlib",
 ]
-description = "Redox self-hosted development tools meta-package"
+description = "Self-hosted development tools meta-package"

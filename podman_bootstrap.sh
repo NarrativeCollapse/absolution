@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# This script setup the Redox build system with Podman
+# This script setup the Absolution build system with Podman
 # It install the Podman dependencies for cross-compilation
 # and download the build system configuration files
 
@@ -12,14 +12,14 @@ set -e
 banner()
 {
   echo "|------------------------------------------|"
-  echo "|----- Welcome to the redox bootstrap -----|"
+  echo "|----- Welcome to the Absolution bootstrap -----|"
   echo "|-------- for building with Podman --------|"
   echo "|------------------------------------------|"
 }
 
 ############################################################################
 # This function takes care of installing a dependency via package manager of
-# choice for building Redox on BSDs (macOS, FreeBSD, etc.).
+# choice for building Absolution on BSDs (macOS, FreeBSD, etc.).
 # @params:    $1 package manager
 #             $2 package name
 #             $3 binary name (optional)
@@ -87,7 +87,7 @@ osx()
 
 ###############################################################################
 # This function takes care of installing all dependencies using MacPorts
-# for building Redox on macOS
+# for building Absolution on macOS
 # @params:    $1 the emulator to install, "virtualbox" or "qemu"
 ###############################################################################
 osx_macports()
@@ -115,7 +115,7 @@ osx_macports()
 
 ###############################################################################
 # This function takes care of installing all dependencies using Homebrew
-# for building Redox on macOS
+# for building Absolution on macOS
 # @params:    $1 the emulator to install, "virtualbox" or "qemu"
 ###############################################################################
 osx_homebrew()
@@ -143,7 +143,7 @@ osx_homebrew()
 
 ###############################################################################
 # This function takes care of installing all dependencies using pkg
-# for building Redox on FreeBSD
+# for building Absolution on FreeBSD
 # @params:    $1 the emulator to install, "virtualbox" or "qemu"
 ###############################################################################
 freebsd()
@@ -171,7 +171,7 @@ freebsd()
 }
 
 ###############################################################################
-# This function takes care of installing all dependencies for building Redox on
+# This function takes care of installing all dependencies for building Absolution on
 # Arch Linux
 # @params:	$1 the emulator to install, "virtualbox" or "qemu"
 ###############################################################################
@@ -199,7 +199,7 @@ archLinux()
 }
 
 ###############################################################################
-# This function takes care of installing all dependencies for building Redox on
+# This function takes care of installing all dependencies for building Absolution on
 # Debian-based Linux
 # @params:	$1 the emulator to install, "virtualbox" or "qemu"
 # 		$2 the package manager to use
@@ -246,7 +246,7 @@ ubuntu()
 }
 
 ###############################################################################
-# This function takes care of installing all dependencies for building Redox on
+# This function takes care of installing all dependencies for building Absolution on
 # Fedora Linux
 # @params:	$1 the emulator to install, "virtualbox" or "qemu"
 ###############################################################################
@@ -290,7 +290,7 @@ fedora()
 }
 
 ###############################################################################
-# This function takes care of installing all dependencies for building Redox on
+# This function takes care of installing all dependencies for building Absolution on
 # *SUSE Linux
 # @params:	$1 the emulator to install, "virtualbox" or "qemu"
 ###############################################################################
@@ -385,7 +385,7 @@ suse()
 }
 
 ###############################################################################
-# This function takes care of installing all dependencies for building Redox on
+# This function takes care of installing all dependencies for building Absolution on
 # Gentoo Linux
 # @params:	$1 the emulator to install, "virtualbox" or "qemu"
 ###############################################################################
@@ -434,7 +434,7 @@ gentoo()
 }
 
 ###############################################################################
-# This function takes care of installing all dependencies for building Redox on
+# This function takes care of installing all dependencies for building Absolution on
 # Solus
 # @params:	$1 the emulator to install, "virtualbox" or "qemu"
 ###############################################################################
@@ -477,7 +477,7 @@ solus()
 usage()
 {
     echo "------------------------"
-    echo "|Redox bootstrap script|"
+    echo "|Absolution bootstrap script|"
     echo "------------------------"
     echo "Usage: ./podman_bootstrap.sh"
     echo "OPTIONS:"
@@ -562,12 +562,12 @@ rustInstall()
 boot()
 {
     echo "Cloning gitlab repo..."
-    git clone https://gitlab.redox-os.org/redox-os/redox.git --origin upstream
+    git clone https://github.com/NarrativeCollapse/absolution.git
     echo "Creating .config with PODMAN_BUILD=1"
-    echo 'PODMAN_BUILD?=1' > redox/.config
+    echo 'PODMAN_BUILD?=1' > absolution/.config
     if [ "$(uname -m)" = "arm64" ]; then
         echo "Appending .config with ARCH=aarch64"
-        echo 'ARCH=aarch64' >> redox/.config
+        echo 'ARCH=aarch64' >> absolution/.config
     fi
     echo "Cleaning up..."
     rm podman_bootstrap.sh
@@ -575,13 +575,13 @@ boot()
     echo "---------------------------------------"
     echo "Well it looks like you are ready to go!"
     echo "---------------------------------------"
-    echo "The file redox/.config was created with PODMAN_BUILD=1."
+    echo "The file absolution/.config was created with PODMAN_BUILD=1."
     echo "If you need a much quicker installation, run: "
-    echo "  echo REPO_BINARY=1 >> redox/.config"
+    echo "  echo REPO_BINARY=1 >> absolution/.config"
     echo
-    echo "Run the following commands to build Redox using Podman:"
+    echo "Run the following commands to build Absolution using Podman:"
     echo
-    echo "cd redox"
+    echo "cd absolution"
     MAKE="make"
     if [ "$(uname)" = "FreeBSD" ]; then
         MAKE="gmake"
@@ -663,4 +663,4 @@ if [ "$dependenciesonly" = false ]; then
     boot
 fi
 
-echo "Redox bootstrap complete!"
+echo "Absolution bootstrap complete!"

@@ -1,5 +1,5 @@
 [package]
-description = "Example of a dynamic library for Redox"
+description = "Example of a dynamic library"
 
 [source]
 git = "https://gitlab.redox-os.org/redox-os/dynamic-example.git"

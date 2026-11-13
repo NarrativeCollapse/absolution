@@ -12,7 +12,7 @@ autotools_recursive_regenerate
 template = "custom"
 script = """
 DYNAMIC_INIT
-# Redox does not support any of the aarch64 run-time cpu capability detection
+# Absolution does not support any of the aarch64 run-time cpu capability detection
 # APIs supported by libopus
 case "${TARGET}" in
     aarch64-*-redox) COOKBOOK_CONFIGURE_FLAGS+=(--disable-rtcd);;

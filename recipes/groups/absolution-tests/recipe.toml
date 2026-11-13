@@ -4,7 +4,7 @@ dependencies = [
     "acid",
     "acid-bins",
     "auto-test",
-    "hello-redox",
+    "hello-absolution",
     "os-test",
     "os-test-bins",
     "openposixtestsuite",

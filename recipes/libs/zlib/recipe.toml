@@ -10,7 +10,7 @@ template = "custom"
 script = """
 DYNAMIC_STATIC_INIT
 COOKBOOK_CONFIGURE_FLAGS=(--prefix="/usr" --shared --static)
-# TODO: fPIC is the default on linux but not on redox and
+# TODO: fPIC is the default on linux but not on Absolution and
 #       required by libz-sys as zlib statically linked there
 export CFLAGS="$CFLAGS -fPIC"
 # See https://stackoverflow.com/questions/21396988/zlib-build-not-configuring-properly-with-cross-compiler-ignores-ar.

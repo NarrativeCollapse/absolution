@@ -1,4 +1,4 @@
-# The Redox build server configuration
+# Every package expected to build, for testing the whole collection
 
 # General settings
 [general]
@@ -9,16 +9,16 @@ prompt = false
 [packages]
 
 # If you need to disable some broken package comment out instead of removal to not increase the maintenance cost
-#TODO: commented out recipes need to be built and tested inside of Redox to verify if they returned to work
+#TODO: commented out recipes need to be built and tested on Absolution to verify if they returned to work
 
 # Meta-packages below
 
 auto-test = {}
 autotools = {}
 dev-essential = {}
-dev-redox = {}
+dev-absolution = {}
 llvm21-common = {}
-redox-tests = {}
+absolution-tests = {}
 
 # Normal packages below
 
@@ -32,7 +32,6 @@ bash-completion = {}
 benchmarks = {}
 binutils = {}
 binutils-gdb = {}
-book = {}
 boost = {}
 bootloader = {}
 bottom = {}
@@ -77,7 +76,7 @@ gobject-introspection = {}
 gitoxide = {}
 gzip = {}
 helix = {}
-hello-redox = {}
+hello-absolution = {}
 hf = {}
 htop = {}
 jansson = {}
@@ -216,4 +215,3 @@ zstd = {}
 #pciids = {}
 #twin-commander = {}
 #webrender = {} # unwind
-#website = {}

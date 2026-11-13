@@ -74,7 +74,7 @@ else
 	cp -r "$(GCC_INSTALL)/". "$@.partial"
 	cp -r "$(RUST_INSTALL)/". "$@.partial"
 	cp -r "$(CLANG_INSTALL)/". "$@.partial"
-ifneq ($(HOSTED_REDOX),1)
+ifneq ($(SELF_HOSTED),1)
 	rm -rf "$@.partial/$(GNU_TARGET)/include/"*
 	cp -r "$(GCC_INSTALL)/$(GNU_TARGET)/include/c++" "$@.partial/$(GNU_TARGET)/include/c++"
 else
@@ -85,7 +85,7 @@ endif
 	export PATH="$(ROOT)/$@.partial/bin:$$PATH" && \
 	export CARGO="env -u CARGO cargo" $(PREFIX_CONFIG) && \
 	$(REPO_BIN) cook relibc $(COOKBOOK_OPTS)
-ifneq ($(HOSTED_REDOX),1)
+ifneq ($(SELF_HOSTED),1)
 	cp -r "$(RELIBC_TARGET)/stage/usr/". "$@.partial/$(GNU_TARGET)"
 	mkdir -p "$@.partial/$(GNU_TARGET)/usr"
 	ln -s "../include" "$@.partial/$(GNU_TARGET)/usr/include"
@@ -118,7 +118,7 @@ $(PREFIX)/relibc-install.tar.gz: $(PREFIX)/sysroot
 ifeq ($(PREFIX_BINARY),1)
 
 # PREFIX_BINARY FOR LINUX -----------------------------------------
-ifneq ($(HOSTED_REDOX),1)
+ifneq ($(SELF_HOSTED),1)
 
 $(PREFIX)/%.tar.gz: | $(CONTAINER_TAG)
 ifeq ($(PODMAN_BUILD),1)
@@ -140,7 +140,7 @@ else
 	mv "$@.partial" "$@"
 endif
 
-# PREFIX_BINARY FOR REDOX -----------------------------------------
+# PREFIX_BINARY FOR ABSOLUTION-------------------------------------
 else
 
 $(PREFIX)/id_ed25519.pub.toml: | $(CONTAINER_TAG)

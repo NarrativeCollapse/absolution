@@ -1,5 +1,5 @@
 [package]
-description = "The Redox microkernel"
+description = "The Absolution microkernel"
 
 [source]
 git = "https://gitlab.redox-os.org/redox-os/kernel.git"

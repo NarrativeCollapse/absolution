@@ -1,4 +1,4 @@
-# The Redox build server configuration for host tools
+# The Absolution build server configuration for host tools
 
 # Packages listed here is to aid the build server to compile `host:` recipes
 # commonly found within dev dependencies of packages and distribute them.

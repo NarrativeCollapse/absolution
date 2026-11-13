@@ -140,7 +140,7 @@ pub fn generate_html_pkg(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{name} - Redox OS Package</title>
+    <title>{name} - Absolution Package</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -252,12 +252,12 @@ pub fn generate_html_index(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Redox Package Repository</title>
+    <title>Absolution Package Repository</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <header class="index-header">
-        <h1>Redox OS Package Repository</h1>
+        <h1>Absolution Package Repository</h1>
         <p class="description">Repository for <code>{target}</code></p>
         <p><a href="files.html">Search files in this Repository</a></p>
     </header>

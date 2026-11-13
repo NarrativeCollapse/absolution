@@ -10,7 +10,7 @@ set -ex
 trap 'kill -HUP 0' EXIT
 
 eval "$(make setenv)"
-make "${BUILD}/redox-live.iso"
+make "${BUILD}/absolution-live.iso"
 
 echo "Allowing packet forwarding"
 echo 1 | sudo tee /proc/sys/net/ipv4/ip_forward
@@ -51,7 +51,7 @@ set -- "$@" \
 # iPXE
 set -- "$@" \
     "--dhcp-userclass=set:ipxe,iPXE" \
-    "--dhcp-boot=tag:ipxe,redox.ipxe"
+    "--dhcp-boot=tag:ipxe,absolution.ipxe"
 
 python3 -m http.server -b "${NETWORK}.1" -d "${BUILD}" "8080" &
 sudo dnsmasq "$@"

@@ -11,5 +11,5 @@ prompt = false
 
 # Package settings
 [packages]
-dev-redox = {}
-hello-redox = {}
+dev-absolution = {}
+hello-absolution = {}

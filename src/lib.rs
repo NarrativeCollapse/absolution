@@ -16,12 +16,13 @@ pub(crate) use cook::pty::log_to_pty;
 /// Maximum depth of a dependency chain before it is reported as a cycle.
 pub const WALK_DEPTH: usize = 16;
 
-/// Default remote package source, for recipes built with the "remote" kind.
-/// Overridable with the mirrors config (via `cookbook.toml`).
+/// Where recipes built with the "remote" kind download pre-built packages.
+/// Point it elsewhere with a mirror in `cookbook.toml`.
 pub const REMOTE_PKG_SOURCE: &str = "https://static.redox-os.org/pkg";
 
-/// Whether the cookbook itself is running on the target OS (self-hosting).
-pub fn is_redox() -> bool {
+/// Whether the cookbook is running on Absolution itself (self-hosting).
+/// The compiler still calls the target OS "redox".
+pub fn self_hosted() -> bool {
     cfg!(target_os = "redox")
 }
 

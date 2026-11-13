@@ -1,10 +1,8 @@
 # Absolution
 
-Absolution is a command-line operating system built on the [Redox OS](https://www.redox-os.org) microkernel and userspace. It has no display server, window manager or graphical applications: it boots to a text console and is driven from the shell.
+Absolution is a command-line operating system with a microkernel and a userspace written mostly in Rust. It has no display server, window manager or graphical applications: it boots to a text console and is driven from the shell.
 
 This repository is the build system. It fetches the sources of each component, cross-compiles them, packages them and assembles a bootable disk image.
-
-Absolution is an independent derivative of Redox OS and is not affiliated with or endorsed by the Redox OS nonprofit. "Redox OS" is their trademark.
 
 ## What is in an image
 
@@ -102,4 +100,4 @@ CI runs the same three commands. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-MIT. See [LICENSE](LICENSE), which retains the copyright notices of the Redox OS developers whose work this is built on.
+MIT. See [LICENSE](LICENSE).

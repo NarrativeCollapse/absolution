@@ -1,5 +1,5 @@
 [package]
-description = "Documentation for relibc (Redox POSIX/C Standard Library)"
+description = "Documentation for relibc, the POSIX/C standard library"
 
 [source]
 same_as = "../../core/relibc"

@@ -3,20 +3,20 @@
 #   make qemu share="tag=/path/to/dir"               # one share, tag is specified as "tag"
 #   make qemu share=/path/a share_tag=tag            # one share, tag is specified as "tag"
 #   make qemu share="tag_1=/path/a tag_2=/path/b"    # several shares: tag=dir ...
-#   make qemu share=redox                            # this build tree, tag "redox"
-#   make qemu share="redox=/other/path"              # ordinary share, tag "redox"
-#   make qemu share=/path/to/dir:ro                  # read-only, also tag=dir:ro and redox:ro
+#   make qemu share=absolution                            # this build tree, tag "absolution"
+#   make qemu share="absolution=/other/path"              # ordinary share, tag "absolution"
+#   make qemu share=/path/to/dir:ro                  # read-only, also tag=dir:ro and absolution:ro
 #   make ch share=...                                # the same, on Cloud Hypervisor
 #
 # Each share gets its own host-side virtiofsd daemon (started and stopped by
 # scripts/virtiofs-run.sh), a vhost-user-fs device, and a virtio-fsd scheme
-# process on Redox. In the guest, a share appears at /scheme/virtio-fsd.<tag>.
+# process on Absolution. In the guest, a share appears at /scheme/virtio-fsd.<tag>.
 # The emulator flags for each share are added in mk/qemu.mk and mk/ch.mk.
 # Shared directories must exist. The guest cannot change anything in a :ro share.
 #
-# WARNING: share=redox exposes the whole build tree to the guest, including
-# the harddrive.img Redox is booted from, .git and .config. Writing to them
-# from Redox can corrupt the build system. share=redox:ro avoids that.
+# WARNING: share=absolution exposes the whole build tree to the guest, including
+# the harddrive.img Absolution is booted from, .git and .config. Writing to them
+# from Absolution can corrupt the build system. share=absolution:ro avoids that.
 #
 # virtiofsd runs on the host. The first one found is used: VIRTIOFSD, then
 # virtiofsd in PATH, /usr/libexec/virtiofsd or /usr/lib/qemu/virtiofsd. When
@@ -41,7 +41,7 @@ VIRTIOFSD_URL?=https://gitlab.com/virtio-fs/virtiofsd/-/jobs/artifacts/main/raw/
 VIRTIOFSD_DOWNLOAD=build/virtiofsd/$(HOST_ARCH)/virtiofsd
 
 ifneq ($(strip $(share)),)
-	share_norm:=$(foreach s,$(share),$(if $(filter redox redox:ro,$(s)),redox=$(ROOT)$(if $(filter %:ro,$(s)),:ro),$(s)))
+	share_norm:=$(foreach s,$(share),$(if $(filter absolution absolution:ro,$(s)),absolution=$(ROOT)$(if $(filter %:ro,$(s)),:ro),$(s)))
 	ifeq ($(words $(share_norm)),1)
 		share_list:=$(if $(findstring =,$(share_norm)),$(share_norm),$(share_tag)=$(share_norm))
 	else

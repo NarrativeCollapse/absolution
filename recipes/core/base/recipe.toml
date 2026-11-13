@@ -1,5 +1,5 @@
 [package]
-description = "Essential system components and drivers for Redox"
+description = "Essential system components and drivers"
 
 [source]
 git = "https://gitlab.redox-os.org/redox-os/base.git"

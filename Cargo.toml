@@ -1,5 +1,5 @@
 [package]
-name = "redox_cookbook"
+name = "absolution_cookbook"
 version = "0.1.0"
 authors = ["Jeremy Soller <jackpot51@gmail.com>"]
 edition = "2024"

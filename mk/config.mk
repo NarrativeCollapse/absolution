@@ -5,7 +5,7 @@
 HOST_ARCH?=$(shell uname -m)
 
 # Configuration
-## Architecture to build Redox for (aarch64, i586, or x86_64). Defaults to a host one
+## Architecture to build Absolution for (aarch64, i586, or x86_64). Defaults to a host one
 ARCH?=$(HOST_ARCH)
 ## Sub-device type for aarch64 if needed
 BOARD?=
@@ -55,7 +55,7 @@ FSTOOLS_NO_MOUNT?=0
 ## only do this by default if this is inside podman
 SCCACHE_BUILD?=$(shell [ -f /run/.containerenv ] && echo 1 || echo 0)
 ## The containerfile to use for the Podman base image
-CONTAINERFILE?=podman/redox-base-containerfile
+CONTAINERFILE?=podman/absolution-base-containerfile
 
 # Per host variables
 NPROC=nproc
@@ -120,12 +120,12 @@ else ifeq ($(UNAME),FreeBSD)
 	FUMOUNT=sudo umount
 	VB_AUDIO=pulse # To check, will probably be OSS on most setups
 	VBM=VBoxManage
-else ifeq ($(UNAME),Redox)
+else ifeq ($(UNAME),Redox) # the kernel still reports its original name
 	PODMAN_BUILD=0
 	export CARGO_NET_GIT_FETCH_WITH_CLI=true
 # TODO: allow overriding to cross compiler toolchain when build server have one prebuilt
-	HOSTED_REDOX=1
-# Don't check for dependencies if you will be using Hosted Redox
+	SELF_HOSTED=1
+# Don't check for dependencies when building on Absolution itself
 	SKIP_CHECK_TOOLS=1
 ifneq ($(shell which repo),)
 	REPO_BIN=repo
@@ -199,7 +199,7 @@ ifeq ($(SCCACHE_BUILD),1)
 	export RUSTC_WRAPPER:=$(CC_WRAPPER)
 endif
 
-ifeq ($(HOSTED_REDOX),1)
+ifeq ($(SELF_HOSTED),1)
 FSTOOLS_TAG=
 endif
 

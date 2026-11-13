@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# This script install Redox in the free space of your storage device
+# This script install Absolution in the free space of your storage device
 # and add a boot entry (if you are using the systemd-boot boot loader)
 
 set -e
@@ -37,16 +37,16 @@ fi
 BOOTLOADER="recipes/core/bootloader/target/${ARCH}-unknown-redox/stage/usr/lib/boot/bootloader.efi"
 set -x
 sudo mkdir -p "${ESP}/EFI" "${ESP}/loader/entries"
-sudo cp "${BOOTLOADER}" "${ESP}/EFI/redox.efi"
-sudo tee "${ESP}/loader/entries/redox.conf" <<EOF
-title Redox OS
-efi /EFI/redox.efi
+sudo cp "${BOOTLOADER}" "${ESP}/EFI/absolution.efi"
+sudo tee "${ESP}/loader/entries/absolution.conf" <<EOF
+title Absolution
+efi /EFI/absolution.efi
 EOF
 set +x
 
 sync
 
-echo "Finished installing Redox OS dual boot"
+echo "Finished installing Absolution dual boot"
 echo ""
 echo "To mount the RedoxFS partition, run:"
 echo "  ./scripts/mount-redoxfs.sh ${DISK}"

@@ -1,5 +1,5 @@
 [package]
-description = "Runner script for Redox OS test suite"
+description = "Runner script for the acid test suite"
 
 [source]
 same_as = "../acid"

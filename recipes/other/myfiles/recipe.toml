@@ -1,5 +1,5 @@
 [package]
-description = "When creating a customized Redox image from Redox build system, add files to this recipe to auto-install them in the user's home directory"
+description = "When creating a customized image with the build system, add files to this recipe to install them in the user's home directory"
 
 [build]
 template = "custom"

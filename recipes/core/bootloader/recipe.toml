@@ -1,5 +1,5 @@
 [package]
-description = "Redox OS bootloader"
+description = "Bootloader"
 
 [source]
 git = "https://gitlab.redox-os.org/redox-os/bootloader.git"
