@@ -72,6 +72,9 @@ pub struct CookConfig {
 impl CookConfig {
     /// Resolve settings from the config file, then `env`, then defaults.
     fn resolve(file: CookSettings, env: &dyn Fn(&str) -> Option<String>) -> Result<Self> {
+        // An empty value means unset: the make files forward variables into
+        // the build container whether or not the user set them.
+        let env = |key: &str| env(key).filter(|value| !value.trim().is_empty());
         let flag = |key: &str, from_file: Option<bool>, default: bool| -> Result<bool> {
             match (from_file, env(key)) {
                 (Some(value), _) => Ok(value),
@@ -93,7 +96,7 @@ impl CookConfig {
             return Err(Error::Other("The number of jobs must be at least 1".into()));
         }
 
-        let in_ci = env("CI").is_some_and(|value| !value.is_empty());
+        let in_ci = env("CI").is_some();
         let tui = file.tui.unwrap_or(!in_ci);
         let clean_target = flag("COOKBOOK_CLEAN_TARGET", file.clean_target, false)?;
         let web = flag("COOKBOOK_WEB", None, false)?;
@@ -119,12 +122,11 @@ impl CookConfig {
     }
 }
 
-/// Parse a boolean environment variable. An empty value counts as unset-false
-/// so that `VAR= make` behaves like not setting it.
+/// Parse a boolean environment variable.
 fn parse_bool(key: &str, raw: &str) -> Result<bool> {
     match raw.trim().to_ascii_lowercase().as_str() {
         "1" | "true" | "yes" | "on" => Ok(true),
-        "" | "0" | "false" | "no" | "off" => Ok(false),
+        "0" | "false" | "no" | "off" => Ok(false),
         _ => Err(Error::Other(format!(
             "{key}={raw:?} is not a boolean, expected true/false or 1/0"
         ))),
@@ -364,6 +366,24 @@ mod tests {
         assert!(CookConfig::resolve(CookSettings::default(), &env).is_err());
         let env = env_of(&[("COOKBOOK_MAKE_JOBS", "0")]);
         assert!(CookConfig::resolve(CookSettings::default(), &env).is_err());
+    }
+
+    #[test]
+    fn empty_env_values_mean_unset() {
+        // What `podman run --env COOKBOOK_MAKE_JOBS=$(COOKBOOK_MAKE_JOBS)`
+        // passes when the user set nothing.
+        let env = env_of(&[
+            ("CI", ""),
+            ("COOKBOOK_MAKE_JOBS", ""),
+            ("COOKBOOK_VERBOSE", ""),
+            ("COOKBOOK_LOGS", " "),
+            ("COOKBOOK_COMPRESSED", ""),
+        ]);
+        let cook = CookConfig::resolve(CookSettings::default(), &env).unwrap();
+        assert_eq!(
+            cook,
+            CookConfig::resolve(CookSettings::default(), &no_env).unwrap()
+        );
     }
 
     #[test]

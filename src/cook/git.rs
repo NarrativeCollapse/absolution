@@ -35,6 +35,20 @@ pub fn is_checkout(dir: &Path) -> bool {
     dir.join(".git").exists()
 }
 
+/// Fail unless `dir` is the root of a checkout. Without this, git would
+/// search the parent directories and answer for the enclosing repository,
+/// which for a recipe's `source` directory is this build tree itself.
+fn require_checkout(dir: &Path) -> Result<()> {
+    if is_checkout(dir) {
+        Ok(())
+    } else {
+        Err(Error::Other(format!(
+            "{:?} is not a git checkout",
+            dir.display()
+        )))
+    }
+}
+
 fn git(dir: &Path) -> Command {
     let mut command = Command::new("git");
     command.arg("-C").arg(dir);
@@ -44,6 +58,7 @@ fn git(dir: &Path) -> Command {
 /// Run a git query and return its trimmed stdout, or `None` if git exited
 /// unsuccessfully (which is how git reports "no such ref/config key").
 fn query(dir: &Path, args: &[&str]) -> Result<Option<String>> {
+    require_checkout(dir)?;
     let output = git(dir)
         .args(args)
         .stdin(Stdio::null())
@@ -138,6 +153,7 @@ pub fn normalize_url(url: &str) -> &str {
 
 /// Point `origin` at `url` and fetch it.
 pub fn fetch_origin(dir: &Path, url: &str, logger: &PtyOut) -> Result<()> {
+    require_checkout(dir)?;
     let mut command = git(dir);
     command.args(["remote", "set-url", "origin", url]);
     run_command(command, logger)?;
@@ -149,6 +165,7 @@ pub fn fetch_origin(dir: &Path, url: &str, logger: &PtyOut) -> Result<()> {
 
 /// The date of the `HEAD` commit, in UTC and strict ISO 8601.
 pub fn commit_date(dir: &Path) -> Result<String> {
+    require_checkout(dir)?;
     let output = git(dir)
         .args(["log", "-1", "--date=iso-strict-local", "--format=%ad"])
         .env("TZ", "UTC")
@@ -290,6 +307,19 @@ mod tests {
             rev_before_date(&clone, "2037-01-01T00:00:00Z").unwrap(),
             head(&clone).unwrap().rev
         );
+    }
+
+    #[test]
+    fn directories_inside_a_checkout_are_not_checkouts() {
+        let (_tmp, _upstream, clone) = fixture();
+        // Like a recipe's source dir inside the build tree, but not a clone.
+        let nested = clone.join("recipes/x/source");
+        fs::create_dir_all(&nested).unwrap();
+        assert!(head(&clone).is_ok());
+        assert!(head(&nested).is_err());
+        assert!(resolve_commit(&nested, "v1.0").is_err());
+        assert!(commit_date(&nested).is_err());
+        assert!(fetch_origin(&nested, "unused", &None).is_err());
     }
 
     #[test]

@@ -160,6 +160,8 @@ fi
 reexport_flags
 
 COOKBOOK_CARGO="${COOKBOOK_REDOXER}"
+# Left unquoted where expanded on purpose: recipes give flags with their
+# values as one string, such as "--bin find", and rely on word splitting.
 COOKBOOK_CARGO_FLAGS=(
     --locked
 )
@@ -169,7 +171,7 @@ function cookbook_cargo {
         --path "${COOKBOOK_SOURCE}${COOKBOOK_CARGO_PATH:+/$COOKBOOK_CARGO_PATH}" \
         --root "${COOKBOOK_STAGE}/usr" \
         -j "${COOKBOOK_MAKE_JOBS}" ${install_flags} \
-        "${COOKBOOK_CARGO_FLAGS[@]}" "$@"
+        ${COOKBOOK_CARGO_FLAGS[@]} "$@"
 }
 
 # cargo template using cargo build (prefixed name)
@@ -182,7 +184,7 @@ function cookbook_cargo_build {
     mkdir -pv "${COOKBOOK_STAGE}/usr/bin"
     "${COOKBOOK_CARGO}" build \
         --manifest-path "${COOKBOOK_SOURCE}${COOKBOOK_CARGO_PATH:+/$COOKBOOK_CARGO_PATH}/Cargo.toml" \
-        ${bin_flags} ${build_flags} -j "${COOKBOOK_MAKE_JOBS}" "${COOKBOOK_CARGO_FLAGS[@]}"
+        ${bin_flags} ${build_flags} -j "${COOKBOOK_MAKE_JOBS}" ${COOKBOOK_CARGO_FLAGS[@]}
     cp -v \
         "target/${TARGET}/${build_type}/${bin_dir}/${bin_name}" \
         "${COOKBOOK_STAGE}/usr/bin/${bin_final_name}"

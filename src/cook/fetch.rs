@@ -320,6 +320,7 @@ impl GitFetch<'_> {
             self.clone_repository()?;
             (false, true)
         } else if !check_source {
+            require_checkout(&self.source_dir)?;
             (true, false)
         } else {
             require_checkout(&self.source_dir)?;

@@ -917,6 +917,58 @@ mod tests {
         assert_eq!(custom, "make");
     }
 
+    /// Run the generated cargo script in bash with `cargo` replaced by a
+    /// function that prints its arguments, and return what it printed.
+    fn cargo_arguments(kind: &BuildKind) -> String {
+        let stage = tempfile::tempdir().unwrap();
+        let script = format!(
+            "{BUILD_PRESCRIPT}\n{SHARED_PRESCRIPT}\n\
+             print_args() {{ printf '[%s]' \"$@\"; }}\n{}",
+            build_script(kind)
+        );
+        let output = Command::new("bash")
+            .arg("-ec")
+            .arg(script)
+            .env_clear()
+            .env("PATH", std::env::var_os("PATH").unwrap())
+            .env("COOKBOOK_REDOXER", "print_args")
+            // Targets without dynamic linking skip the cross setup.
+            .env("TARGET", "riscv64gc-unknown-redox")
+            .env("COOKBOOK_HOST_TARGET", "x86_64-unknown-linux-gnu")
+            .env("COOKBOOK_SOURCE", "/src")
+            .env("COOKBOOK_STAGE", stage.path())
+            .env("COOKBOOK_SYSROOT", "/sysroot")
+            .env("COOKBOOK_MAKE_JOBS", "2")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout).unwrap()
+    }
+
+    #[test]
+    fn cargo_flags_reach_cargo_as_separate_arguments() {
+        let printed = cargo_arguments(&BuildKind::Cargo {
+            cargopath: None,
+            cargoflags: vec!["--bin find".into(), "--features".into(), "cli".into()],
+            cargopackages: vec![],
+            cargoexamples: vec![],
+            clearlocked: false,
+            cargopackagesprefixed: false,
+        });
+        assert!(
+            printed.ends_with("[--locked][--bin][find][--features][cli]"),
+            "{printed}"
+        );
+        assert!(
+            printed.starts_with("[install][--path][/src/.]"),
+            "{printed}"
+        );
+    }
+
     #[test]
     fn split_moves_claimed_files() {
         let tmp = tempfile::tempdir().unwrap();
