@@ -1,36 +1,31 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
-# This script show all files installed by a recipe
+# Show which recipes installed each file of the image
 
-# Ensure arch and config are set as desired, we use these to find the build dir
-export ARCH=$(uname -m)
-export CONFIG_NAME=server
+# The architecture and config select the build directory.
+ARCH=$(uname -m)
+CONFIG_NAME=server
+export ARCH CONFIG_NAME
 
-# Make sure to unmount the image first
-make unmount &>/dev/null || true
+# Make sure the image is not mounted from an earlier run
+make unmount >/dev/null 2>&1 || true
 
-# Mount the image
 make mount >/dev/null
 
-# Find all files
-find "build/${ARCH}/${CONFIG_NAME}/" -type f | cut -d / -f5- |\
-sort |\
-uniq |\
-while read path
+find "build/${ARCH}/${CONFIG_NAME}/" -type f | cut -d / -f5- | sort -u |
+while IFS= read -r path
 do
-    # Skip empty paths
     if [ -z "${path}" ]
     then
         continue
     fi
 
-    # Find all packages providing this file
+    # Every recipe whose stage provides this file
     pkgs="$(
-        find recipes/*"/target/${ARCH}-unknown-redox/stage/${path}" 2>/dev/null |
-        cut -d/ -f3 |
-        tr '\n' ' ' |
-        sort |
-        uniq
+        for stage_file in recipes/*/*/"target/${ARCH}-unknown-redox/stage/${path}"
+        do
+            [ -e "$stage_file" ] && printf '%s\n' "$stage_file" | cut -d / -f3
+        done | sort -u | tr '\n' ' '
     )"
     if [ -n "${pkgs}" ]
     then
@@ -40,5 +35,4 @@ do
     fi
 done
 
-# Make sure to unmount the image
-make unmount &>/dev/null || true
+make unmount >/dev/null 2>&1 || true

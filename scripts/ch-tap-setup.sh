@@ -1,9 +1,9 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Host setup for `make ch net=tap`: tap redox0, IPv4 forwarding, firewalld NAT
 # and dnsmasq DHCP/DNS. Needs firewalld and dnsmasq. Re-run after a reboot.
 # As root without sudo, set TAP_USER=<user>.
 
-set -euo pipefail
+set -eu
 
 # Debian does not put the sbin directories in a normal user's PATH.
 PATH="${PATH}:/usr/local/sbin:/usr/sbin:/sbin"
@@ -20,6 +20,15 @@ POLICY=chnet-nat
 SYSCTL_DROPIN=/etc/sysctl.d/90-redox-tap.conf
 DNSMASQ_PID=/run/redox0-dnsmasq.pid
 WAIT_TIMEOUT=3 # seconds
+IS_ROOT=0
+[ "$(id -u)" -eq 0 ] && IS_ROOT=1
+
+# POSIX sleep only takes whole seconds; poll faster where sleep allows it.
+if sleep 0.1 2>/dev/null; then
+    NAP=0.1 NAPS_PER_SECOND=10
+else
+    NAP=1 NAPS_PER_SECOND=1
+fi
 
 step() {
     printf '\n==> %s\n' "$*"
@@ -35,31 +44,33 @@ die() {
 }
 
 as_root() {
-    if [[ "${EUID}" -eq 0 ]]; then
+    if [ "${IS_ROOT}" -eq 1 ]; then
         "$@"
     else
         sudo "$@"
     fi
 }
 
+# wait_until <seconds> <command...>: retry the command until it succeeds.
 wait_until() {
-    local deadline=$((SECONDS + $1))
+    naps_left=$(($1 * NAPS_PER_SECOND))
     shift
     until "$@"; do
-        ((SECONDS < deadline)) || return 1
-        sleep 0.1
+        [ "${naps_left}" -gt 0 ] || return 1
+        naps_left=$((naps_left - 1))
+        sleep "${NAP}"
     done
 }
 
 # Only tun/tap devices have tun_flags. IFF_TAP is 0x0002, IFF_UP is 0x1,
 # owner -1 means none.
 tap_exists() {
-    [[ -e "/sys/class/net/${TAP}" ]]
+    [ -e "/sys/class/net/${TAP}" ]
 }
 
 is_tap() {
-    [[ -r "/sys/class/net/${TAP}/tun_flags" ]] \
-        && (($(<"/sys/class/net/${TAP}/tun_flags") & 0x0002))
+    [ -r "/sys/class/net/${TAP}/tun_flags" ] \
+        && [ $(($(cat "/sys/class/net/${TAP}/tun_flags") & 0x0002)) -ne 0 ]
 }
 
 tap_owner() {
@@ -67,7 +78,7 @@ tap_owner() {
 }
 
 link_is_up() {
-    (($(<"/sys/class/net/${TAP}/flags") & 0x1))
+    [ $(($(cat "/sys/class/net/${TAP}/flags") & 0x1)) -ne 0 ]
 }
 
 tap_addrs() {
@@ -79,7 +90,7 @@ has_addr() {
 }
 
 forwarding_on() {
-    [[ "$(sysctl -n net.ipv4.ip_forward)" == "1" ]]
+    [ "$(sysctl -n net.ipv4.ip_forward)" = "1" ]
 }
 
 forwarding_persisted_by() {
@@ -90,7 +101,7 @@ forwarding_persisted_by() {
 FW_CHANGED=0
 
 fw_ensure_exists() {
-    local kind="$1" name="$2" list
+    kind="$1" name="$2" list=""
     case "${kind}" in
         zone) list=--get-zones ;;
         policy) list=--get-policies ;;
@@ -105,7 +116,7 @@ fw_ensure_exists() {
 }
 
 fw_ensure() {
-    local what="$1" scope="$2" query="$3" add="$4"
+    what="$1" scope="$2" query="$3" add="$4"
     if firewall-cmd --permanent "${scope}" "${query}" >/dev/null; then
         info "${what}: already set"
     else
@@ -117,7 +128,7 @@ fw_ensure() {
 
 # --get-target is permanent-only. The runtime value is the target: line.
 policy_accepts() {
-    [[ "$(firewall-cmd --policy="${POLICY}" --list-all | awk '$1 == "target:" { print $2 }')" == "ACCEPT" ]]
+    [ "$(firewall-cmd --policy="${POLICY}" --list-all | awk '$1 == "target:" { print $2 }')" = "ACCEPT" ]
 }
 
 dnsmasq_pids() {
@@ -143,14 +154,14 @@ dhcp_port_free() {
 }
 
 preflight() {
-    if [[ -z "${TAP_USER:-}" ]]; then
-        if [[ "${EUID}" -eq 0 ]]; then
+    if [ -z "${TAP_USER:-}" ]; then
+        if [ "${IS_ROOT}" -eq 1 ]; then
             TAP_USER="${SUDO_USER:-}"
         else
             TAP_USER="$(id -un)"
         fi
     fi
-    if [[ -z "${TAP_USER}" || "${TAP_USER}" == "root" ]]; then
+    if [ -z "${TAP_USER}" ] || [ "${TAP_USER}" = "root" ]; then
         die "run this as the user that starts cloud-hypervisor (sudo from that user is fine), or set TAP_USER=<user>."
     fi
     TAP_UID="$(id -u "${TAP_USER}")" || die "no such user: ${TAP_USER}"
@@ -158,13 +169,12 @@ preflight() {
     if ! command -v firewall-cmd >/dev/null 2>&1 || ! firewall-cmd --state >/dev/null 2>&1; then
         die "firewalld is not running. This script only supports firewalld; without it, use plain 'make ch', whose passt network needs no tap."
     fi
-    local cmd
     for cmd in ip sysctl dnsmasq ss pgrep; do
         command -v "${cmd}" >/dev/null 2>&1 || die "missing command: ${cmd}"
     done
 
     echo "Setting up ${TAP} for 'make ch net=tap': host ${TAP_CIDR}, guest DHCP pool ${DHCP_FIRST}-${DHCP_LAST}."
-    if [[ "${EUID}" -ne 0 ]]; then
+    if [ "${IS_ROOT}" -eq 0 ]; then
         echo "Privileged steps run through sudo, which may ask you to authenticate."
     fi
 }
@@ -174,13 +184,12 @@ setup_tap() {
     TAP_IS_NEW=0
     if tap_exists; then
         is_tap || die "${TAP} exists but is not a tap device. Remove or rename it first."
-        local owner
         owner="$(tap_owner)"
-        if [[ "${owner}" == "${TAP_UID}" ]]; then
+        if [ "${owner}" = "${TAP_UID}" ]; then
             info "exists and is owned by ${TAP_USER} (uid ${TAP_UID}), keeping it"
             return
         fi
-        if [[ "${owner}" == "-1" ]]; then
+        if [ "${owner}" = "-1" ]; then
             info "exists but has no owner, not ${TAP_USER} (uid ${TAP_UID}): deleting it"
         else
             info "exists but is owned by uid ${owner}, not ${TAP_USER} (uid ${TAP_UID}): deleting it"
@@ -196,9 +205,8 @@ setup_tap() {
 
 setup_address() {
     step "Host address ${TAP_CIDR} on ${TAP} (the guest's gateway and DNS server)"
-    local addr
     for addr in $(tap_addrs); do
-        [[ "${addr}" == "${TAP_CIDR}" ]] || die "${TAP} already has ${addr}; this script expects ${TAP_CIDR}."
+        [ "${addr}" = "${TAP_CIDR}" ] || die "${TAP} already has ${addr}; this script expects ${TAP_CIDR}."
     done
     if has_addr; then
         info "already set"
@@ -223,9 +231,8 @@ setup_forwarding() {
         as_root sysctl -q -w net.ipv4.ip_forward=1
     fi
 
-    local persist
     persist="$(forwarding_persisted_by || true)"
-    if [[ -n "${persist}" ]]; then
+    if [ -n "${persist}" ]; then
         info "kept across reboots by ${persist}"
     else
         info "writing ${SYSCTL_DROPIN} so it survives a reboot"
@@ -244,7 +251,7 @@ setup_firewalld() {
     fw_ensure_exists policy "${POLICY}"
     fw_ensure "ingress zone ${ZONE}" --policy="${POLICY}" --query-ingress-zone="${ZONE}" --add-ingress-zone="${ZONE}"
     fw_ensure "egress zone ANY" --policy="${POLICY}" --query-egress-zone=ANY --add-egress-zone=ANY
-    if [[ "$(firewall-cmd --permanent --policy="${POLICY}" --get-target)" == "ACCEPT" ]]; then
+    if [ "$(firewall-cmd --permanent --policy="${POLICY}" --get-target)" = "ACCEPT" ]; then
         info "target ACCEPT: already set"
     else
         info "target ACCEPT: setting"
@@ -254,7 +261,7 @@ setup_firewalld() {
     fw_ensure "masquerade" --policy="${POLICY}" --query-masquerade --add-masquerade
 
     step "Applying firewalld settings"
-    if [[ "${FW_CHANGED}" -eq 1 ]]; then
+    if [ "${FW_CHANGED}" -eq 1 ]; then
         info "reloading firewalld to apply the permanent changes"
         as_root firewall-cmd --reload >/dev/null
     else
@@ -274,20 +281,21 @@ setup_firewalld() {
 # a new dnsmasq.
 setup_dnsmasq() {
     step "dnsmasq on ${TAP} (DHCP ${DHCP_FIRST}-${DHCP_LAST}, gateway and DNS ${TAP_ADDR})"
-    local pids pid
-    mapfile -t pids < <(dnsmasq_pids)
+    # Whitespace-separated PIDs; splitting them into words is intended.
+    pids="$(dnsmasq_pids | tr '\n' ' ')"
+    pids="${pids% }"
 
-    if [[ "${TAP_IS_NEW}" -eq 0 ]] && dnsmasq_answering; then
-        info "already answering DHCP and DNS (pid ${pids[*]:-unknown}), keeping it"
+    if [ "${TAP_IS_NEW}" -eq 0 ] && dnsmasq_answering; then
+        info "already answering DHCP and DNS (pid ${pids:-unknown}), keeping it"
         return
     fi
-    if [[ "${TAP_IS_NEW}" -eq 0 ]]; then
+    if [ "${TAP_IS_NEW}" -eq 0 ]; then
         info "dnsmasq is not answering both DHCP and DNS on ${TAP}"
-    elif [[ ${#pids[@]} -gt 0 ]]; then
-        info "${TAP} was recreated, so dnsmasq (pid ${pids[*]}) is bound to the old interface"
+    elif [ -n "${pids}" ]; then
+        info "${TAP} was recreated, so dnsmasq (pid ${pids}) is bound to the old interface"
     fi
 
-    for pid in "${pids[@]}"; do
+    for pid in ${pids}; do
         info "stopping dnsmasq pid ${pid}"
         as_root kill "${pid}" || true
     done
@@ -313,7 +321,7 @@ setup_dnsmasq() {
 CHECK_FAILED=0
 
 check() {
-    local what="$1"
+    what="$1"
     shift
     if "$@" >/dev/null 2>&1; then
         info "ok      ${what}"
@@ -335,7 +343,7 @@ run_checks() {
     check "dnsmasq answers DHCP on ${TAP} (UDP 67)" dhcp_listening
     check "dnsmasq answers DNS on ${TAP_ADDR} (UDP 53)" dns_listening
 
-    if [[ "${CHECK_FAILED}" -ne 0 ]]; then
+    if [ "${CHECK_FAILED}" -ne 0 ]; then
         echo >&2
         echo "Sockets on ${TAP}:" >&2
         ss -uln | grep -E "%${TAP}:|${TAP_ADDR}:" >&2 || true

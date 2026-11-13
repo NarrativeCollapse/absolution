@@ -1,4 +1,6 @@
-#!/usr/bin/env bash
+#!/bin/sh
+
+# Mount or unmount a RedoxFS partition on a Linux host using FUSE
 
 set -e
 
@@ -6,19 +8,21 @@ MOUNT_POINT="/mnt/redoxfs"
 DISK_DEVICE=""
 
 show_help() {
-    echo "Usage: $0 [options] <device>"
-    echo ""
-    echo "Mount or unmount a RedoxFS partition"
-    echo ""
-    echo "Options:"
-    echo "  -u, --unmount    Unmount the RedoxFS partition"
-    echo "  -m, --mount-point PATH    Custom mount point (default: /mnt/redoxfs)"
-    echo "  -h, --help       Show this help"
-    echo ""
-    echo "Examples:"
-    echo "  $0 /dev/sda3                    Mount /dev/sda3"
-    echo "  $0 -u                           Unmount from default location"
-    echo "  $0 -m /mnt/my-redox /dev/sda3   Mount to custom location"
+    cat <<USAGE
+Usage: $0 [options] <device>
+
+Mount or unmount a RedoxFS partition
+
+Options:
+  -u, --unmount    Unmount the RedoxFS partition
+  -m, --mount-point PATH    Custom mount point (default: /mnt/redoxfs)
+  -h, --help       Show this help
+
+Examples:
+  $0 /dev/sda3                    Mount /dev/sda3
+  $0 -u                           Unmount from default location
+  $0 -m /mnt/my-redox /dev/sda3   Mount to custom location
+USAGE
 }
 
 unmount_fs() {
@@ -32,14 +36,17 @@ unmount_fs() {
     exit 0
 }
 
+have() {
+    command -v "$1" >/dev/null 2>&1
+}
+
 check_dependencies() {
-    # Try to find redoxfs in multiple locations
     REDOXFS_BIN=""
     if [ -x "build/fstools/bin/redoxfs" ]; then
         REDOXFS_BIN="build/fstools/bin/redoxfs"
     elif [ -x "$(dirname "$0")/../build/fstools/bin/redoxfs" ]; then
         REDOXFS_BIN="$(dirname "$0")/../build/fstools/bin/redoxfs"
-    elif command -v redoxfs &> /dev/null; then
+    elif have redoxfs; then
         REDOXFS_BIN="redoxfs"
     fi
 
@@ -52,11 +59,11 @@ check_dependencies() {
     if ! ldconfig -p 2>/dev/null | grep -q "libfuse3"; then
         echo "Error: libfuse 3.x is not installed"
         echo "Please install it:"
-        if command -v apt-get &> /dev/null; then
+        if have apt-get; then
             echo "  sudo apt-get install fuse3 libfuse3-dev"
-        elif command -v dnf &> /dev/null; then
+        elif have dnf; then
             echo "  sudo dnf install fuse3-devel"
-        elif command -v pacman &> /dev/null; then
+        elif have pacman; then
             echo "  sudo pacman -S fuse3"
         else
             echo "  (check your package manager for fuse3)"
@@ -67,13 +74,17 @@ check_dependencies() {
 
 UNMOUNT=false
 
-while [[ $# -gt 0 ]]; do
+while [ $# -gt 0 ]; do
     case $1 in
         -u|--unmount)
             UNMOUNT=true
             shift
             ;;
         -m|--mount-point)
+            if [ $# -lt 2 ]; then
+                echo "Error: $1 needs a path" >&2
+                exit 1
+            fi
             MOUNT_POINT="$2"
             shift 2
             ;;
@@ -116,4 +127,3 @@ echo "Mounting $DISK_DEVICE to $MOUNT_POINT..."
 
 echo "RedoxFS successfully mounted at $MOUNT_POINT"
 echo "To unmount, run: $0 -u"
-

@@ -1,3 +1,3 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
-rldd -l $1
+rldd -l "$@"

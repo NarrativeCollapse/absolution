@@ -1,10 +1,14 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
-# This script print the recipe configuration
+# Print a recipe's configuration, or another file in its directory
 
-FILE=${2:-recipe.toml}
+if [ -z "$1" ]
+then
+    echo "Usage: $0 <recipe-name> [file]" >&2
+    exit 1
+fi
 
-RECIPE_PATH=$(make find.$1)
-RECIPE_PATH=${RECIPE_PATH//$'\r'/}
+file=${2:-recipe.toml}
+recipe_path=$(make "find.$1" | tr -d '\r')
 
-cat "$RECIPE_PATH/$FILE"
+cat "$recipe_path/$file"

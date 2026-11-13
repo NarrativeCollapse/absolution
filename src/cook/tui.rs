@@ -165,7 +165,7 @@ pub fn get_clicked_tab_index(
 /// Kill everything under given PID or this process PID.
 pub fn kill_everything(pid: Option<u32>) {
     // Best effort: if bash cannot be started there is nothing left to try.
-    let _ = process::Command::new("bash")
+    let _ = process::Command::new("sh")
         .arg("-c")
         .arg(KILL_ALL_PID.replace("$PID", &pid.unwrap_or_else(process::id).to_string()))
         .stdout(process::Stdio::null())

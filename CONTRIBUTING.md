@@ -18,6 +18,13 @@ cargo test
 
 `cargo test` includes `tests/recipes.rs`, which parses every recipe and image definition, so it also covers changes that touch only `recipes/` or `config/`.
 
+## Portability
+
+- Standalone shell scripts (`scripts/`, the bootstrap scripts, `bin/`) are POSIX `sh`: they start with `#!/bin/sh` and use no bash features. CI checks them with `shellcheck --shell=sh` and `dash -n`.
+- Recipe build scripts, and the prelude the cookbook runs before them, are bash. That is deliberate: recipes pass lists of flags as bash arrays, such as `COOKBOOK_CONFIGURE_FLAGS+=(...)`, and POSIX `sh` has no arrays.
+- Call standard utilities with their POSIX options only: `cp -R`, `patch -d DIR -p1`, `dd` instead of `truncate`, a temporary file instead of `sed -i`, no `-v` on `cp`, `mkdir` or `rm`.
+- Tools the build needs that POSIX does not define: GNU make, bash, git, tar, curl and wget. Prefer what they share with their BSD counterparts.
+
 ## Recipes
 
 - Pin sources. Give tar sources a `blake3` hash and git sources a `rev`. Without them a build is neither verified nor reproducible.

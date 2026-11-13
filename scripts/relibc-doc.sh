@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
 # This script generates build/relibc-doc and build/relibc-doc.tar.gz
 

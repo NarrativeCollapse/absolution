@@ -1,60 +1,57 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
-# This script print all recipe executable names to find duplicates and verify executable name conflicts
+# List the executables each recipe installs, to find name conflicts
 
 usage() {
     echo "List executable names to find duplicates"
-    echo "Usage: $0 [-h] [-a] [-arm64 | -i686] [recipes]"
-    echo "Default architecture is x86_64, -arm64 is aarch64, -i686 is i686"
+    echo "Usage: $0 [-h] [-a] [-arm64 | -i586] [recipes]"
+    echo "Default architecture is x86_64, -arm64 is aarch64, -i586 is i586"
     echo "Only duplicates are listed unless -a is specified"
     echo "-h is this message"
-    exit
+    exit 0
 }
 
+repo=target/release/repo
 recipes=""
-
 target="x86_64-unknown-redox"
-uniq="uniq -D --skip-fields=1"
+all=false
 
-for arg in "${@:1}"
+for arg in "$@"
 do
-    if [ "$arg" == "-arm64" ]
-    then
-        target="aarch64-unknown-redox"
-    elif [ "$arg" == "-i686" ]
-    then
-        target="i686-unknown-redox"
-    elif [ "$arg" == "-a" ]
-    then
-        uniq="cat"
-    elif [ "$arg" == "-h" ]
-    then
-    	usage
-    else
-        recipes+=" $arg"
-    fi
+    case "$arg" in
+        -arm64) target="aarch64-unknown-redox";;
+        -i586|-i686) target="i586-unknown-redox";;
+        -a) all=true;;
+        -h) usage;;
+        *) recipes="$recipes $arg";;
+    esac
 done
 
 if [ -z "$recipes" ]
 then
-    recipes="$(target/release/repo repo-list --all-compiled --display=path)"
+    recipes="$("$repo" repo-list --all-compiled --display=path)"
 fi
 
+# Print "<recipe path> <executable>" lines; then keep every line whose
+# executable name occurs more than once, unless -a was given.
 for recipe in $recipes
 do
-    if [[ "$recipe" == *\/* ]]
-    then
-        recipe_name="$(basename $recipe)"
-        recipe_path="$recipe"
-    else
-        recipe_name="$recipe"
-        recipe_path="$(target/release/repo find $recipe_name)"
-    fi
-    
-    for command in $(find "$recipe_path/target/$target/stage/usr/bin" -type f 2> /dev/null) \
-        $(find "$recipe_path/target/$target/stage/bin" -type f 2> /dev/null)
+    case "$recipe" in
+        */*) recipe_path="$recipe";;
+        *) recipe_path="$("$repo" find "$recipe")";;
+    esac
+    for dir in "$recipe_path/target/$target/stage/usr/bin" "$recipe_path/target/$target/stage/bin"
     do
-        shortname="$(basename $command)"
-    	echo "$recipe_path $shortname"
+        [ -d "$dir" ] || continue
+        find "$dir" -type f | while IFS= read -r command
+        do
+            echo "$recipe_path $(basename "$command")"
+        done
     done
-done | sort | $uniq
+done | sort -k 2 | if [ "$all" = true ]
+then
+    cat
+else
+    awk '{ count[$2]++; line[NR] = $0; name[NR] = $2 }
+         END { for (i = 1; i <= NR; i++) if (count[name[i]] > 1) print line[i] }'
+fi

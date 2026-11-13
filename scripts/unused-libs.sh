@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
 # This script show all unused packages in given category, or "wip/libs" by default.
 

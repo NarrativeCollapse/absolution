@@ -695,22 +695,62 @@ pub(crate) fn fetch_resolve_canon(
 }
 
 /// Unpack an archive into `dest`, dropping its top-level directory.
+///
+/// Only the historical `tar` keys `x`, `o`, `v` and `f` are used, which GNU
+/// tar, BSD tar and busybox all accept. The top-level directory is removed
+/// here rather than with GNU's `--strip-components`.
 pub(crate) fn fetch_extract_tar(source_tar: &Path, dest: &Path, logger: &PtyOut) -> Result<()> {
-    let verbose = get_config().cook.verbose;
+    let verbose = crate::config::try_get_config().is_some_and(|config| config.cook.verbose);
+    let source_tar = source_tar
+        .canonicalize()
+        .map_err(wrap_io_err!(source_tar, "Resolving path"))?;
+    let staging = dest.with_added_extension("extract");
+    create_dir_clean(&staging)?;
+
+    // `o`: files belong to whoever runs tar, even when that is root.
+    // Redox's tar does not know `o`; it never restores owners anyway.
+    let keys = match (is_redox(), verbose) {
+        (true, true) => "xvf",
+        (true, false) => "xf",
+        (false, true) => "xovf",
+        (false, false) => "xof",
+    };
     let mut command = Command::new("tar");
-    if is_redox() {
-        command.arg(if verbose { "xvf" } else { "xf" });
-    } else {
-        command.arg("--extract").arg("--no-same-owner");
-        if verbose {
-            command.arg("--verbose");
+    command.arg(keys).arg(&source_tar).current_dir(&staging);
+    run_command(command, logger)?;
+
+    strip_top_level(&staging, dest)?;
+    remove_all(&staging)
+}
+
+/// Move the contents of every directory directly inside `staging` into
+/// `dest`, like `tar --strip-components=1`: files at the top level of the
+/// archive are dropped.
+fn strip_top_level(staging: &Path, dest: &Path) -> Result<()> {
+    let read_dir =
+        |dir: &Path| std::fs::read_dir(dir).map_err(wrap_io_err!(dir, "Listing directory"));
+    for top in read_dir(staging)? {
+        let top = top.map_err(wrap_io_err!(staging, "Reading directory entry"))?;
+        let is_dir = top
+            .file_type()
+            .map_err(wrap_io_err!(top.path(), "Reading file type"))?
+            .is_dir();
+        if !is_dir {
+            continue;
         }
-        command.arg("--file");
+        for child in read_dir(&top.path())? {
+            let child = child.map_err(wrap_io_err!(top.path(), "Reading directory entry"))?;
+            let target = dest.join(child.file_name());
+            if target.exists() || target.is_symlink() {
+                bail_other_err!(
+                    "The archive has more than one top-level directory providing {:?}",
+                    child.file_name()
+                );
+            }
+            rename(&child.path(), &target)?;
+        }
     }
-    command.arg(source_tar);
-    command.arg("--directory").arg(dest);
-    command.arg("--strip-components").arg("1");
-    run_command(command, logger)
+    Ok(())
 }
 
 /// Download the crates a cargo project depends on, so that the build itself
@@ -852,8 +892,8 @@ pub(crate) fn fetch_apply_patches(
             std::fs::read(&patch_file).map_err(wrap_io_err!(patch_file, "Reading patch"))?;
 
         let mut command = Command::new("patch");
-        command.arg("--directory").arg(source_dir);
-        command.arg("--strip=1");
+        // -d and -p are the POSIX spellings of --directory and --strip.
+        command.arg("-d").arg(source_dir).arg("-p1");
         run_command_stdin(command, &patch, logger)?;
     }
     if let Some(script) = script {
@@ -881,4 +921,83 @@ fn write_source_info(recipe: &CookRecipe, info: &SourceIdentifier) -> Result<()>
 /// The identifiers recorded by the last fetch of `recipe`.
 pub fn fetch_get_source_info(recipe: &CookRecipe) -> Result<SourceIdentifier> {
     read_toml(&source_info_path(recipe))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn write(path: &Path, content: &str) {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, content).unwrap();
+    }
+
+    #[test]
+    fn extract_drops_the_top_level_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        write(&tmp.path().join("pkg-1.0/src/main.c"), "int main;");
+        write(&tmp.path().join("pkg-1.0/README"), "readme");
+        let archive = tmp.path().join("source.tar");
+        let status = Command::new("tar")
+            .arg("cf")
+            .arg(&archive)
+            .arg("pkg-1.0")
+            .current_dir(tmp.path())
+            .status()
+            .unwrap();
+        assert!(status.success());
+
+        let dest = tmp.path().join("source.tmp");
+        fs::create_dir(&dest).unwrap();
+        fetch_extract_tar(&archive, &dest, &None).unwrap();
+
+        assert_eq!(
+            fs::read_to_string(dest.join("src/main.c")).unwrap(),
+            "int main;"
+        );
+        assert_eq!(fs::read_to_string(dest.join("README")).unwrap(), "readme");
+        assert!(!dest.join("pkg-1.0").exists());
+        assert!(!dest.with_added_extension("extract").exists());
+    }
+
+    #[test]
+    fn strip_top_level_drops_top_level_files_and_detects_clashes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let staging = tmp.path().join("staging");
+        write(&staging.join("stray-file"), "");
+        write(&staging.join("a/one"), "1");
+        write(&staging.join("b/two"), "2");
+        let dest = tmp.path().join("dest");
+        fs::create_dir(&dest).unwrap();
+        strip_top_level(&staging, &dest).unwrap();
+        assert!(dest.join("one").is_file() && dest.join("two").is_file());
+        assert!(!dest.join("stray-file").exists());
+
+        write(&staging.join("c/one"), "again");
+        assert!(strip_top_level(&staging, &dest).is_err());
+    }
+
+    #[test]
+    fn patches_apply_with_posix_options() {
+        let tmp = tempfile::tempdir().unwrap();
+        let source = tmp.path().join("source");
+        write(&source.join("hello.txt"), "hello\n");
+        write(
+            &tmp.path().join("fix.patch"),
+            "--- a/hello.txt\n+++ b/hello.txt\n@@ -1 +1 @@\n-hello\n+goodbye\n",
+        );
+        fetch_apply_patches(
+            tmp.path(),
+            &["fix.patch".to_string()],
+            &None,
+            &source,
+            &None,
+        )
+        .unwrap();
+        assert_eq!(
+            fs::read_to_string(source.join("hello.txt")).unwrap(),
+            "goodbye\n"
+        );
+    }
 }

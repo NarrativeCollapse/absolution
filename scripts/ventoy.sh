@@ -1,17 +1,11 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
-# This script create and copy the Redox bootable image to an Ventoy-formatted device
+# Build the live images and copy them to a Ventoy-formatted device
 
 set -e
 
-ARCHS=(
-    i686
-    x86_64
-)
-CONFIGS=(
-    minimal
-    server
-)
+ARCHS="i586 x86_64"
+CONFIGS="minimal server"
 
 VENTOY="/media/${USER}/Ventoy"
 if [ ! -d "${VENTOY}" ]
@@ -20,16 +14,18 @@ then
     exit 1
 fi
 
-for ARCH in "${ARCHS[@]}"
+for ARCH in $ARCHS
 do
-    for CONFIG_NAME in "${CONFIGS[@]}"
+    for CONFIG_NAME in $CONFIGS
     do
         IMAGE="build/${ARCH}/${CONFIG_NAME}/redox-live.iso"
+        DEST="${VENTOY}/redox-${CONFIG_NAME}-${ARCH}.iso"
         make ARCH="${ARCH}" CONFIG_NAME="${CONFIG_NAME}" "${IMAGE}"
-        cp -v "${IMAGE}" "${VENTOY}/redox-${CONFIG_NAME}-${ARCH}.iso"
+        echo "Copying ${IMAGE} to ${DEST}"
+        cp "${IMAGE}" "${DEST}"
     done
 done
 
 sync
 
-echo "Finished copying configs (${CONFIGS[@]}) for archs (${ARCHS[@]})"
+echo "Finished copying configs (${CONFIGS}) for archs (${ARCHS})"

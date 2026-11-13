@@ -970,6 +970,46 @@ mod tests {
     }
 
     #[test]
+    fn postscript_tidies_the_stage_with_portable_tools() {
+        let stage = tempfile::tempdir().unwrap();
+        let metainfo = stage.path().join("usr/share/metainfo/app.xml");
+        let libtool = stage.path().join("usr/lib/libfoo.la");
+        let crates = stage.path().join(".crates.toml");
+        for (path, content) in [
+            (&metainfo, "<component><id>app</id></component>\n"),
+            (&libtool, ""),
+            (&crates, ""),
+        ] {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, content).unwrap();
+        }
+
+        let output = Command::new("bash")
+            .arg("-ec")
+            .arg(BUILD_POSTSCRIPT)
+            .env("COOKBOOK_STAGE", stage.path())
+            .env("COOKBOOK_NAME", "app")
+            .env("COOKBOOK_NOSTRIP", "1")
+            .env("GNU_TARGET", "x86_64-unknown-redox")
+            .env_remove("REDOXER_USE_CLANG")
+            .env_remove("REDOXER_USE_LTO")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            std::fs::read_to_string(&metainfo).unwrap(),
+            "<component><id>app</id><pkgname>app</pkgname></component>\n"
+        );
+        assert!(!libtool.exists());
+        assert!(!crates.exists());
+        assert!(!metainfo.with_added_extension("tmp").exists());
+    }
+
+    #[test]
     fn split_moves_claimed_files() {
         let tmp = tempfile::tempdir().unwrap();
         let stage = tmp.path().join("stage.tmp");

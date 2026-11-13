@@ -1,27 +1,23 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
-# This script create a list with:
-# "recipe-name = {} #TODO"
-# For quick testing of WIP recipes
+# Print "recipe-name = {}    # <matching line>" for every recipe whose
+# recipe.toml matches a pattern, ready to paste into a filesystem config for
+# quick testing of WIP recipes.
 
-# Given a string, find recipe.toml files containing that string.
-# Create a list that can be copy/pasted into a filesystem config.
-
-if [ -z "$*" ]
+if [ $# -eq 0 ]
 then
     echo "Find matching recipes, and format for inclusion in config"
     echo "Usage: $0 \"pattern\""
-    echo "Must be run from 'redox' directory"
+    echo "Must be run from the root of the build tree"
     echo "e.g. $0 \"TODO.*error\""
     exit 1
 fi
 
-cookbook_recipes="recipes"
-recipe_paths=$(grep -rl "$*" "$cookbook_recipes" --include recipe.toml)
+pattern="$*"
 
-for recipe_path in $recipe_paths
+find recipes -name recipe.toml -exec grep -l -e "$pattern" {} + | sort |
+while IFS= read -r recipe_path
 do
-    recipe_dir="$(dirname $recipe_path)"
-    recipe_name="$(basename $recipe_dir)"
-    echo "$recipe_name = {}    # " $(grep "$*" $recipe_path)
+    recipe_name="$(basename "$(dirname "$recipe_path")")"
+    printf '%s = {}    # %s\n' "$recipe_name" "$(grep -e "$pattern" "$recipe_path" | tr '\n' ' ')"
 done

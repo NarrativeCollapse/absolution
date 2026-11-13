@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # This must be run outside podman build so the build/podman volume mount to /root contains all home folder changes
 set -ex
 

@@ -1,9 +1,9 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Runs a command next to a passt vhost-user network backend, for `make ch`.
 #   passt-run.sh <socket>.sock [passt options...] -- <command...>
 # Under SELinux, passt may only use sockets in $XDG_RUNTIME_DIR or /tmp.
 
-set -euo pipefail
+set -eu
 
 STARTUP_TIMEOUT=5 # seconds
 
@@ -17,19 +17,27 @@ usage() {
   exit 2
 }
 
-[[ $# -ge 1 ]] || usage
+# Quote one argument so that `eval` reproduces it exactly.
+quote() {
+  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+[ $# -ge 1 ] || usage
 SOCK="$1"
 shift
-PASST_ARGS=()
-while [[ $# -gt 0 && "$1" != "--" ]]; do
-  PASST_ARGS+=("$1")
+PASST_ARGS=""
+while [ $# -gt 0 ] && [ "$1" != "--" ]; do
+  PASST_ARGS="${PASST_ARGS} $(quote "$1")"
   shift
 done
-[[ $# -ge 2 ]] || usage
+[ $# -ge 2 ] || usage
 shift # the "--"
 
-[[ "${SOCK}" == *.sock ]] || die "socket '${SOCK}' must end in .sock"
-[[ ${#SOCK} -lt 108 ]] || die "socket path too long (${#SOCK} bytes): ${SOCK}"
+case "${SOCK}" in
+  *.sock) ;;
+  *) die "socket '${SOCK}' must end in .sock" ;;
+esac
+[ ${#SOCK} -lt 108 ] || die "socket path too long (${#SOCK} bytes): ${SOCK}"
 LOG="${SOCK%.sock}.log"
 REPAIR_SOCK="${SOCK}.repair"
 
@@ -50,28 +58,35 @@ fi
 PASST_PID=
 
 cleanup() {
+  # Keep the exit status of the command (or of the signal) as the script's.
+  status=$?
   trap - EXIT INT TERM
-  if [[ -n "${PASST_PID}" ]]; then
+  if [ -n "${PASST_PID}" ]; then
     kill "${PASST_PID}" 2>/dev/null || true
     wait "${PASST_PID}" 2>/dev/null || true
   fi
   rm -f "${SOCK}" "${REPAIR_SOCK}"
+  exit "${status}"
 }
 
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+# shellcheck disable=SC2120 # "$@" is reset inside the subshell
 start_passt() {
   mkdir -p "$(dirname "${SOCK}")"
   rm -f "${SOCK}" "${REPAIR_SOCK}"
-  "${PASST_BIN}" --vhost-user --foreground --one-off --socket "${SOCK}" "${PASST_ARGS[@]}" \
-    </dev/null >"${LOG}" 2>&1 &
+  # The subshell replaces itself with passt, so $! is passt's PID.
+  (
+    eval "set -- ${PASST_ARGS}"
+    exec "${PASST_BIN}" --vhost-user --foreground --one-off --socket "${SOCK}" "$@"
+  ) </dev/null >"${LOG}" 2>&1 &
   PASST_PID=$!
 }
 
 start_failed() {
-  if [[ -s "${LOG}" ]]; then
+  if [ -s "${LOG}" ]; then
     # After a bad option passt prints its whole usage text.
     sed '/^Usage:/,$d' "${LOG}" | tail -n 20 >&2
     die "$1; see ${LOG}"
@@ -79,12 +94,21 @@ start_failed() {
   die "$1 and logged nothing. If SELinux is enforcing, put the socket in \$XDG_RUNTIME_DIR or /tmp."
 }
 
+# POSIX sleep only takes whole seconds; poll faster where sleep allows it.
+if sleep 0.1 2>/dev/null; then
+  NAP=0.1 TRIES=$((STARTUP_TIMEOUT * 10))
+else
+  NAP=1 TRIES=${STARTUP_TIMEOUT}
+fi
+
 wait_for_socket() {
-  local deadline=$((SECONDS + STARTUP_TIMEOUT))
-  until [[ -S "${SOCK}" ]]; do
+  tries=0
+  until [ -S "${SOCK}" ]; do
     kill -0 "${PASST_PID}" 2>/dev/null || start_failed "passt exited"
-    ((SECONDS < deadline)) || start_failed "passt did not create ${SOCK} within ${STARTUP_TIMEOUT}s"
-    sleep 0.1
+    [ "${tries}" -lt "${TRIES}" ] \
+      || start_failed "passt did not create ${SOCK} within ${STARTUP_TIMEOUT}s"
+    tries=$((tries + 1))
+    sleep "${NAP}"
   done
 }
 

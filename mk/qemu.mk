@@ -382,7 +382,7 @@ qemu-deps:
 	$(if $(PFLASH1_NEEDED),$(if $(PFLASH1),,$(error UEFI variables needed but not found)),)
 
 $(EXTRA_DISK):
-	truncate -s 1g $@
+	dd if=/dev/null of=$@ bs=1048576 seek=1024 count=0 2>/dev/null
 
 $(WINDOWS_DISK): $(BUILD)/harddrive.img
 	rm -f $@

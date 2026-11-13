@@ -1,6 +1,6 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
-# This script show the changelog of all Redox components
+# Show what changed in each component since the last release tag
 
 set -e
 
@@ -8,12 +8,8 @@ LAST_RELEASE_TAG="$(git describe --tags --abbrev=0)"
 LAST_RELEASE_TIMESTAMP="$(git log --format="%ct" -1 "${LAST_RELEASE_TAG}")"
 echo "Last release: ${LAST_RELEASE_TAG} at ${LAST_RELEASE_TIMESTAMP}"
 
-REPOS=(
-    redox=.
-    cookbook=cookbook
-    rust=rust
-)
-
+summary=false
+mdlinks=false
 if [ "$1" = "--summary" ]
 then
     summary=true
@@ -22,57 +18,56 @@ then
     mdlinks=true
 fi
 
-for package in $(installer/target/release/redox_installer --list-packages -c config/$(uname -m)/ci.toml)
-do
-    package_source="$(target/release/repo find ${package})"
-    REPOS+=("${package}=${package_source}/source")
-done
+repo=target/release/repo
+installer=build/fstools/bin/redox_installer
+bold="$(printf '\033[1m')"
+normal="$(printf '\033[0m')"
 
-# TODO: resolve dependencies instead of manually adding these initfs packages
-for package in init logd ramfs randd zerod
-do
-    package_source="$(target/release/repo find ${package})"
-    REPOS+=("${package}=${package_source}/source")
-done
+# name=path lines, one per component
+list_repos() {
+    echo "build-system=."
+    # TODO: resolve dependencies instead of manually adding these initfs packages
+    for package in $("$installer" --list-packages -c "config/$(uname -m)/ci.toml") \
+        init logd ramfs randd zerod
+    do
+        echo "${package}=$("$repo" find "${package}")/source"
+    done
+}
 
-for name_repo in "${REPOS[@]}"
+list_repos | while IFS= read -r name_repo
 do
-    name="$(echo "${name_repo}" | cut -d "=" -f 1)"
-    repo="$(echo "${name_repo}" | cut -d "=" -f 2-)"
+    name="${name_repo%%=*}"
+    path="${name_repo#*=}"
     if [ "${summary}" = true ]
     then
-        echo
-        echo "### ${name}"
-        echo
+        printf '\n### %s\n\n' "${name}"
     elif [ "${mdlinks}" = true ]
     then
-        echo -n "- [${name}]"
+        printf '%s' "- [${name}]"
     else
-        echo -en "\x1B[1m${name}:\x1B[0m "
+        printf '%s ' "${bold}${name}:${normal}"
     fi
 
-    if [ -e "${repo}/.git" ]
+    if [ -e "${path}/.git" ]
     then
-        remote="$(git -C "${repo}" remote get-url origin)"
-        website="${remote%.*}"
-        before="$(git -C "${repo}" log --until="${LAST_RELEASE_TIMESTAMP}" --format="%h" -1)"
-        after="$(git -C "${repo}" log --since="${LAST_RELEASE_TIMESTAMP}" --format="%h" -1)"
+        remote="$(git -C "${path}" remote get-url origin)"
+        website="${remote%.git}"
+        before="$(git -C "${path}" log --until="${LAST_RELEASE_TIMESTAMP}" --format="%h" -1)"
+        after="$(git -C "${path}" log --since="${LAST_RELEASE_TIMESTAMP}" --format="%h" -1)"
         if [ -z "${before}" ]
         then
             echo "New repository at ${website}"
         elif [ -z "${after}" ]
         then
             echo "No changes"
+        elif [ "${summary}" = true ]
+        then
+            git -C "${path}" log "${before}...${after}" --oneline
+        elif [ "${mdlinks}" = true ]
+        then
+            echo "(${website}/-/compare/${before}...${after})"
         else
-            if [ "${summary}" = true ]
-            then
-                git -C "${repo}" log ${before}...${after} --oneline
-            elif [ "${mdlinks}" = true ]
-            then
-                echo "(${website}/-/compare/${before}...${after})"
-            else
-                echo "${website}/-/compare/${before}...${after}"
-            fi
+            echo "${website}/-/compare/${before}...${after}"
         fi
     else
         echo "Not a git repository"

@@ -1,12 +1,12 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
-# This script show the contents of the "stage" and "sysroot" directories in some recipe
+# Show the contents of the "stage" and "sysroot" directories of recipes
 
-if [ -z "$*" ]
+if [ $# -eq 0 ]
 then
-    echo "Show the contents of the "stage" and 'sysroot' directories in recipe(s)"
+    echo "Show the contents of the 'stage' and 'sysroot' directories in recipe(s)"
     echo "Usage: $0 recipe1 ..."
-    echo "Must be run from the 'redox' directory"
+    echo "Must be run from the root of the build tree"
     echo "e.g. $0 kernel"
     exit 1
 fi
@@ -19,8 +19,11 @@ then
     exit 1
 fi
 
-for recipe in $*
+for recipe in "$@"
 do
     recipe_dir="$("$find_recipe" find "$recipe")"
-    tree "$recipe_dir/target"/*/{stage,sysroot}
+    for dir in "$recipe_dir"/target/*/stage "$recipe_dir"/target/*/sysroot
+    do
+        [ -d "$dir" ] && tree "$dir"
+    done
 done

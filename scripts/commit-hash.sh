@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
 # This script shows the current Git commit hash of system recipes at recipes/core
 

@@ -12,7 +12,7 @@ else
 	if [ -z "$$FILESYSTEM_SIZE" ] ; then \
 	FILESYSTEM_SIZE=$(shell $(INSTALLER) --filesystem-size -c $(FILESYSTEM_CONFIG)); \
 	fi && \
-	truncate -s "$$FILESYSTEM_SIZE"m $@.partial
+	dd if=/dev/null of=$@.partial bs=1048576 seek="$$FILESYSTEM_SIZE" count=0 2>/dev/null
 	umask 022 && $(INSTALLER) $(INSTALLER_OPTS) -c $(FILESYSTEM_CONFIG) $@.partial
 	mv $@.partial $@
 endif
@@ -28,7 +28,7 @@ else
 	if [ -z "$$FILESYSTEM_SIZE" ] ; then \
 	FILESYSTEM_SIZE=$(shell $(INSTALLER) --filesystem-size -c $(FILESYSTEM_CONFIG)); \
 	fi && \
-	truncate -s "$$FILESYSTEM_SIZE"m $@.partial
+	dd if=/dev/null of=$@.partial bs=1048576 seek="$$FILESYSTEM_SIZE" count=0 2>/dev/null
 	umask 022 && $(INSTALLER) $(INSTALLER_OPTS) -c $(FILESYSTEM_CONFIG) --write-bootloader="$(BUILD)/bootloader-live.efi" --live $@.partial
 	mv $@.partial $@
 	cp redox.ipxe $(BUILD)/redox.ipxe
@@ -46,7 +46,7 @@ else
 	if [ -z "$$FILESYSTEM_SIZE" ] ; then \
 	FILESYSTEM_SIZE=$(shell $(INSTALLER) --filesystem-size -c $(FILESYSTEM_CONFIG)); \
 	fi && \
-	truncate -s "$$FILESYSTEM_SIZE"m $@.partial
+	dd if=/dev/null of=$@.partial bs=1048576 seek="$$FILESYSTEM_SIZE" count=0 2>/dev/null
 	$(REDOXFS_MKFS) $(REDOXFS_MKFS_FLAGS) $@.partial
 	mkdir -p $(MOUNT_DIR)
 	$(REDOXFS) $@.partial $(MOUNT_DIR)

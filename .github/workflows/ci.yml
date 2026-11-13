@@ -39,3 +39,19 @@ jobs:
       # Includes tests/recipes.rs, which validates every recipe and image config.
       - name: Test
         run: cargo test --locked
+
+  shell:
+    name: POSIX shell scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Standalone scripts must run under any POSIX sh. Recipe build scripts
+      # are bash by design and are not checked here.
+      - name: Check scripts
+        run: |
+          scripts=$(git ls-files '*.sh' 'bin/*-pkg-config' | grep -v '^recipes/wip/')
+          for f in $scripts; do
+            head -n 1 "$f" | grep -qx '#!/bin/sh' || { echo "$f: interpreter must be /bin/sh"; exit 1; }
+            dash -n "$f"
+          done
+          shellcheck --shell=sh --severity=warning $scripts

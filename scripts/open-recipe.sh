@@ -1,17 +1,16 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
 set -e
 
-# This script open the recipe configuration files with chosen EDITOR env, or chosen by "xdg-open" cli.
-
-# This script must be launched outside podman
+# Open a recipe file with $EDITOR, or with xdg-open.
+# Run this outside podman.
 
 if [ -z "$1" ]
 then
     echo "Open a file into a recipe."
     echo ""
     echo "Usage: [EDITOR=program] $0 <recipe-name> [file]"
-    echo "  [EDITOR=program]: The EDITOR envar to set which app to open, default to 'EDITOR=xdg-open'"
+    echo "  [EDITOR=program]: The program to open the file with, default 'xdg-open'"
     echo "  <recipe-name>: The recipe name, cannot be multiple"
     echo "  [file]: The filename to open, default to 'recipe.toml'"
     echo ""
@@ -22,9 +21,8 @@ then
     exit 1
 fi
 
-EDITOR=${EDITOR:-xdg-open}
-FILE=${2:-recipe.toml}
+editor=${EDITOR:-xdg-open}
+file=${2:-recipe.toml}
 
-RECIPE_PATH=$(make find.$1)
-RECIPE_PATH=${RECIPE_PATH//$'\r'/}
-"$EDITOR" "$RECIPE_PATH/$FILE"
+recipe_path=$(make "find.$1" | tr -d '\r')
+exec "$editor" "$recipe_path/$file"

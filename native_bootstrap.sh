@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
 # This script is used to setup the Redox build system
 # It installs Rustup, the recipe dependencies for cross-compilation
@@ -32,7 +32,7 @@ install_bsd_pkg()
         BIN_NAME=$PKG_NAME
     fi
 
-    BIN_LOCATION=$(which $BIN_NAME || true)
+    BIN_LOCATION=$(command -v "$BIN_NAME" || true)
     if [ -z "$BIN_LOCATION" ]; then
         echo "$PKG_MANAGER install $PKG_NAME"
         $PKG_MANAGER install "$PKG_NAME"
@@ -48,17 +48,17 @@ install_macports_pkg()
 
 install_brew_pkg()
 {
-    install_bsd_pkg "brew" $@
+    install_bsd_pkg "brew" "$@"
 }
 
 install_brew_cask_pkg()
 {
-    install_bsd_pkg "brew cask" $@
+    install_bsd_pkg "brew cask" "$@"
 }
 
 install_freebsd_pkg()
 {
-    install_bsd_pkg "sudo pkg" $@
+    install_bsd_pkg "sudo pkg" "$@"
 }
 
 ##############################################################################
@@ -70,10 +70,10 @@ install_freebsd_pkg()
 ##############################################################################
 osx()
 {
-    if [ ! -z "$(which brew)" ]; then
-        osx_homebrew $@
-    elif [ ! -z "$(which port)" ]; then
-        osx_macports $@
+    if [ ! -z "$(command -v brew)" ]; then
+        osx_homebrew "$@"
+    elif [ ! -z "$(command -v port)" ]; then
+        osx_macports "$@"
     else
         echo "Please install either Homebrew or MacPorts, if you wish to use this script"
         echo "Re-run this script once you installed one of those package managers"
@@ -96,9 +96,9 @@ osx_macports()
 
     install_macports_pkg "git"
 
-    if [ "$1" == "qemu" ]; then
+    if [ "$1" = "qemu" ]; then
         install_macports_pkg "qemu" "qemu-system-x86_64"
-    elif [ "$1" == "virtualbox" ]; then
+    elif [ "$1" = "virtualbox" ]; then
         install_macports_pkg "virtualbox"
     else
         echo "Unknown emulator: $1"
@@ -163,9 +163,9 @@ osx_homebrew()
 
     install_brew_pkg "git"
 
-    if [ "$1" == "qemu" ]; then
+    if [ "$1" = "qemu" ]; then
         install_brew_pkg "qemu" "qemu-system-x86_64"
-    elif [ "$1" == "virtualbox" ]; then
+    elif [ "$1" = "virtualbox" ]; then
         install_brew_pkg "virtualbox"
     else
         echo "Unknown emulator: $1"
@@ -226,9 +226,9 @@ freebsd()
 
     install_freebsd_pkg "git"
 
-    if [ "$1" == "qemu" ]; then
+    if [ "$1" = "qemu" ]; then
         install_freebsd_pkg "qemu" "qemu-system-x86_64"
-    elif [ "$1" == "virtualbox" ]; then
+    elif [ "$1" = "virtualbox" ]; then
         install_freebsd_pkg "virtualbox"
     else
         echo "Unknown emulator: $1"
@@ -292,7 +292,7 @@ archLinux()
 
     pacman_install="pacman -S --needed"
     if [ "$noninteractive" = true ]; then
-        pacman_install+="  --noconfirm"
+        pacman_install="${pacman_install}  --noconfirm"
     fi
 
     echo "Detected Arch Linux"
@@ -336,9 +336,9 @@ archLinux()
     xdg-utils \
     zip"
 
-    if [ "$1" == "qemu" ]; then
+    if [ "$1" = "qemu" ]; then
         packages="$packages qemu-desktop qemu-system-arm qemu-system-riscv"
-    elif [ "$1" == "virtualbox" ]; then
+    elif [ "$1" = "virtualbox" ]; then
         packages="$packages virtualbox"
     else
         echo "Unknown emulator: $1"
@@ -370,9 +370,9 @@ ubuntu()
     echo "Updating system..."
     sudo $package_manager update
 
-    if [ $package_manager == "apt-get" ]; then
+    if [ "$package_manager" = "apt-get" ]; then
         if [ "$noninteractive" = true ]; then
-            install_command+="DEBIAN_FRONTEND=noninteractive apt-get install --assume-yes --quiet"
+            install_command="${install_command}DEBIAN_FRONTEND=noninteractive apt-get install --assume-yes --quiet"
         else
             install_command="apt-get install"
         fi
@@ -453,8 +453,8 @@ ubuntu()
         x86*|i?86) pkgs="$pkgs libc6-dev-i386 syslinux-utils";;
     esac
     sudo $install_command $pkgs --no-install-recommends
-    if [ "$1" == "qemu" ]; then
-        if [ -z "$(which qemu-system-x86_64)" ]; then
+    if [ "$1" = "qemu" ]; then
+        if [ -z "$(command -v qemu-system-x86_64)" ]; then
             echo "Installing QEMU..."
             if apt-cache show qemu-system-riscv > /dev/null 2>&1
             then riscv="qemu-system-riscv" # ubuntu 26 / debian 13
@@ -465,8 +465,8 @@ ubuntu()
         else
             echo "QEMU already installed!"
         fi
-    elif [ "$1" == "virtualbox" ]; then
-        if [ -z "$(which virtualbox)" ]; then
+    elif [ "$1" = "virtualbox" ]; then
+        if [ -z "$(command -v virtualbox)" ]; then
             if grep '^ID=debian$' /etc/os-release > /dev/null; then
                 echo "Virtualbox is not in the official debian packages"
                 echo "To install virtualbox on debian, see https://wiki.debian.org/VirtualBox"
@@ -498,17 +498,17 @@ fedora()
 
     dnf_install="dnf install"
     if [ "$noninteractive" = true ]; then
-        dnf_install+=" --assumeyes --quiet"
+        dnf_install="${dnf_install} --assumeyes --quiet"
     fi
 
     echo "Detected Fedora"
-    if [ -z "$(which git)" ]; then
+    if [ -z "$(command -v git)" ]; then
         echo "Installing git..."
         sudo $dnf_install git-all
     fi
 
-    if [ "$1" == "qemu" ]; then
-        if [ -z "$(which qemu-system-x86_64)" ]; then
+    if [ "$1" = "qemu" ]; then
+        if [ -z "$(command -v qemu-system-x86_64)" ]; then
             echo "Installing QEMU..."
             sudo $dnf_install qemu-system-x86 qemu-kvm
             sudo $dnf_install qemu-system-arm edk2-aarch64
@@ -516,8 +516,8 @@ fedora()
         else
             echo "QEMU already installed!"
         fi
-    elif [ "$1" == "virtualbox" ]; then
-        if [ -z "$(which virtualbox)" ]; then
+    elif [ "$1" = "virtualbox" ]; then
+        if [ -z "$(command -v virtualbox)" ]; then
             echo "Please install VirtualBox and re-run this script,"
             echo "or run with -e qemu"
             exit 1
@@ -582,7 +582,7 @@ fedora()
     zstd ; do rpm -q $pkg > /dev/null || echo $pkg; done)
     # If the list of packages is not empty, install missing
     COUNT=$(echo $PKGS | wc -w)
-    if [ $COUNT -ne 0 ]; then
+    if [ "$COUNT" -ne 0 ]; then
         echo "Installing necessary build tools..."
         sudo $dnf_install $PKGS
     fi
@@ -596,61 +596,60 @@ suse()
 {
     echo "Detected SUSE Linux"
 
-    packages=(
-    "autoconf"
-    "automake"
-    "bison"
-    "cmake"
-    "curl"
-    "doxygen"
-    "file"
-    "flex"
-    "fuse-devel"
-    "gcc"
-    "gcc-c++"
-    "gdb-multiarch"
-    "gettext-tools"
-    "glibc-devel-32bit"
-    "gmp-devel"
-    "libexpat-devel"
-    "libjpeg8-devel"
-    "libpng16-devel"
-    "libtool"
-    "m4"
-    "make"
-    "meson"
-    "nasm"
-    "ninja"
-    "patch"
-    "patchelf"
-    "perl"
-    "perl-HTML-Parser"
-    "pkgconf"
-    "po4a"
-    "protobuf"
-    "python-Mako"
-    "scons"
-    "syslinux-utils"
-    "unzip"
-    "wget"
-    "xdg-utils"
-    "zip"
-    )
+    packages="\
+        autoconf \
+        automake \
+        bison \
+        cmake \
+        curl \
+        doxygen \
+        file \
+        flex \
+        fuse-devel \
+        gcc \
+        gcc-c++ \
+        gdb-multiarch \
+        gettext-tools \
+        glibc-devel-32bit \
+        gmp-devel \
+        libexpat-devel \
+        libjpeg8-devel \
+        libpng16-devel \
+        libtool \
+        m4 \
+        make \
+        meson \
+        nasm \
+        ninja \
+        patch \
+        patchelf \
+        perl \
+        perl-HTML-Parser \
+        pkgconf \
+        po4a \
+        protobuf \
+        python-Mako \
+        scons \
+        syslinux-utils \
+        unzip \
+        wget \
+        xdg-utils \
+        zip"
 
-    if [ -z "$(which git)" ]; then
+    if [ -z "$(command -v git)" ]; then
         echo "Will install git ..."
-        packages+=(git)
+        packages="$packages git"
     fi
 
-    if [ "$1" == "qemu" ]; then
-        if [ -z "$(which qemu-system-x86_64)" ]; then
+    if [ "$1" = "qemu" ]; then
+        if [ -z "$(command -v qemu-system-x86_64)" ]; then
             echo "Will install QEMU..."
-            packages+=(qemu-x86 qemu-kvm)
+            packages="$packages qemu-x86 qemu-kvm"
         else
             echo "QEMU already installed!"
         fi
-    elif [ "$1" == "virtualbox" ]; then
-        if [ -z "$(which virtualbox)" ]; then
+    elif [ "$1" = "virtualbox" ]; then
+        if [ -z "$(command -v virtualbox)" ]; then
             echo "Please install VirtualBox and re-run this script,"
             echo "or run with -e qemu"
             exit 1
@@ -676,7 +675,7 @@ suse()
     # one with --dry-run.
     # We still install all the packages in a single zypper command so that the
     # user has to confirm only once.
-    for p in ${packages[@]}; do
+    for p in $packages; do
         if rpm -q "${p}" > /dev/null ; then
             echo "${p} is already installed"
         else
@@ -692,7 +691,7 @@ suse()
             # when it was only a dry run.
             # To avoid the confusion, we hide the output unless there was an
             # error.
-            if out="$(zypper --non-interactive install --no-confirm --dry-run --force-resolution ${p}  2>&1)"  ; then
+            if out="$(zypper --non-interactive install --no-confirm --dry-run --force-resolution "${p}" 2>&1)"  ; then
                 echo "${p} can be installed"
             else
                 echo "no"
@@ -710,7 +709,7 @@ suse()
         fi
     done
 
-    zypper install ${packages[@]}
+    zypper install $packages
 }
 
 ###############################################################################
@@ -721,21 +720,21 @@ suse()
 gentoo()
 {
     echo "Detected Gentoo Linux"
-    if [ -z "$(which nasm)" ]; then
+    if [ -z "$(command -v nasm)" ]; then
         echo "Installing nasm..."
         sudo emerge dev-lang/nasm
     fi
-    if [ -z "$(which git)" ]; then
+    if [ -z "$(command -v git)" ]; then
         echo "Installing git..."
         sudo emerge dev-vcs/git
     fi
-    if [ -z "$(which fusermount 2>/dev/null)" ] && [ -z "$(which fusermount3 2>/dev/null)" ]; then
+    if [ -z "$(command -v fusermount 2>/dev/null)" ] && [ -z "$(command -v fusermount3 2>/dev/null)" ]; then
         echo "Installing fuse..."
         sudo emerge sys-fs/fuse
     fi
 
-    if [ "$1" == "qemu" ]; then
-        if [ -z "$(which qemu-system-x86_64)" ]; then
+    if [ "$1" = "qemu" ]; then
+        if [ -z "$(command -v qemu-system-x86_64)" ]; then
             echo "Please install QEMU and re-run this script"
             echo "Step1. Add QEMU_SOFTMMU_TARGETS=\"x86_64\" to /etc/portage/make.conf"
             echo "Step2. Execute \"sudo emerge app-emulation/qemu\""
@@ -743,8 +742,8 @@ gentoo()
         else
             echo "QEMU already installed!"
         fi
-    elif [ "$1" == "virtualbox" ]; then
-        if [ -z "$(which virtualbox)" ]; then
+    elif [ "$1" = "virtualbox" ]; then
+        if [ -z "$(command -v virtualbox)" ]; then
             echo "Please install VirtualBox and re-run this script,"
             echo "or run with -e qemu"
             exit 1
@@ -756,7 +755,7 @@ gentoo()
         exit 1
     fi
 
-    if [ -z "$(which cmake)" ]; then
+    if [ -z "$(command -v cmake)" ]; then
         echo "Installing cmake..."
         sudo emerge dev-util/cmake
     fi
@@ -774,14 +773,14 @@ solus()
 {
     echo "Detected Solus"
 
-    if [ "$1" == "qemu" ]; then
-        if [ -z "$(which qemu-system-x86_64)" ]; then
+    if [ "$1" = "qemu" ]; then
+        if [ -z "$(command -v qemu-system-x86_64)" ]; then
             sudo eopkg it qemu
         else
             echo "QEMU already installed!"
         fi
-    elif [ "$1" == "virtualbox" ]; then
-        if [ -z "$(which virtualbox)" ]; then
+    elif [ "$1" = "virtualbox" ]; then
+        if [ -z "$(command -v virtualbox)" ]; then
             echo "Please install VirtualBox and re-run this script,"
             echo "or run with -e qemu"
             exit 1
@@ -842,17 +841,17 @@ redox()
     echo "Detected Redox OS"
     
     # Check if git is installed
-    if [ -z "$(which git)" ]; then
+    if [ -z "$(command -v git)" ]; then
         echo "Installing git..."
         sudo pkg install git
     fi
 
     # Handle emulator selection
-    if [ "$1" == "qemu" ]; then
+    if [ "$1" = "qemu" ]; then
         echo "QEMU is not available on Redox OS yet, but it is mandatory for running the built system."
         echo "Please install QEMU manually on a compatible host or use another machine to run the emulator."
         exit 1
-    elif [ "$1" == "virtualbox" ]; then
+    elif [ "$1" = "virtualbox" ]; then
         echo "VirtualBox is not supported on Redox OS."
         exit 1
     else
@@ -894,7 +893,7 @@ redox()
     for pkg in $PKGS; do
         if ! pkg list | grep -q "^${pkg}"; then
             echo "Attempting to install ${pkg}..."
-            if ! sudo pkg install ${pkg} 2>/dev/null; then
+            if ! sudo pkg install "${pkg}" 2>/dev/null; then
                 echo "Warning: ${pkg} could not be installed. It may not be available yet."
             fi
         else
@@ -945,11 +944,10 @@ cargoInstall()
         # in redox OS, cargo is not based on rustup. Packages are managed by pkg
         return 0
     fi
-    if [[ "`cargo +stable install --list`" != *"$1 v$2"* ]]; then
-        cargo +stable install --force --version "$2" "$1"
-    else
-        echo "You have $1 version $2 installed already!"
-    fi
+    case "$(cargo +stable install --list)" in
+        *"$1 v$2"*) echo "You have $1 version $2 installed already!" ;;
+        *) cargo +stable install --force --version "$2" "$1" ;;
+    esac
 }
 
 #############################################################################
@@ -972,7 +970,7 @@ rustInstall()
         echo "This tool has been deprecated by the maintainer, and will cause issues."
         echo "This script can remove multirust from your system if you wish."
         printf "Uninstall multirust (y/N):"
-        read multirust
+        read -r multirust
         if echo "$multirust" | grep -iq "^y" ;then
             sudo /usr/local/lib/rustlib/uninstall.sh
         else
@@ -981,18 +979,18 @@ rustInstall()
         fi
     fi
     # If rustup is not installed we should offer to install it for them
-    if [ -z "$(which rustup)" ]; then
+    if [ -z "$(command -v rustup)" ]; then
         rustup_options="--default-toolchain stable"
         echo "You do not have rustup installed."
         if [ "$noninteractive" = true ]; then
             rustup="y"
-            rustup_options+=" -y"
+            rustup_options="${rustup_options} -y"
         else
             echo "We HIGHLY recommend using rustup."
             echo "Would you like to install it now?"
             echo "*WARNING* this involves a 'curl | sh' style command"
             printf "(y/N): "
-            read rustup
+            read -r rustup
         fi
         if echo "$rustup" | grep -iq "^y" ;then
             #install rustup
@@ -1000,13 +998,13 @@ rustInstall()
             # You have to add the rustup variables to the $PATH
             echo "export PATH=\"\$HOME/.cargo/bin:\$PATH\"" >> ~/.bashrc
             # source the variables so that we can execute rustup commands in the current shell
-            source ~/.cargo/env
+            . "$HOME/.cargo/env"
         else
             echo "Rustup will not be installed!"
         fi
     fi
 
-    if [ -z "$(which rustc)" ]; then
+    if [ -z "$(command -v rustc)" ]; then
         echo "Rust is not installed"
         echo "Please either run the script again, accepting rustup install"
         echo "or install rustc stable manually (not recommended) via:"
@@ -1035,12 +1033,12 @@ boot()
     echo "---------------------------------------"
     echo
     echo "** Be sure to update your path to include Rust - run the following command: **"
-    echo 'source $HOME/.cargo/env'
+    echo '. "$HOME/.cargo/env"'
     echo
     echo "Run the following commands to build Redox:"
     echo "cd redox"
     MAKE="make"
-    if [[ "$(uname)" == "FreeBSD" ]]; then
+    if [ "$(uname)" = "FreeBSD" ]; then
         MAKE="gmake"
         echo "kldload fuse.ko # This loads the kernel module for FUSE"
     fi
@@ -1052,9 +1050,9 @@ boot()
     exit
 }
 
-if [ "$1" == "-h" ] || [ "$1" == "--help" ]; then
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     usage
-elif [ "$1" == "-u" ]; then
+elif [ "$1" = "-u" ]; then
     git pull upstream master
     exit
 fi
@@ -1081,7 +1079,7 @@ done
 
 banner
 
-if [ "Darwin" == "$(uname -s)" ]; then
+if [ "Darwin" = "$(uname -s)" ]; then
     echo "Detected macOS!"
 
     echo "WARNING: Building Redox OS on MacOS is not recommended, please use podman_bootstrap.sh instead."
@@ -1090,14 +1088,14 @@ if [ "Darwin" == "$(uname -s)" ]; then
     sleep 3
 fi
 
-if [ "$update" == "true" ]; then
+if [ "$update" = "true" ]; then
     git pull upstream master
     exit
 fi
 
 rustInstall "$noninteractive"
 
-if [ "Darwin" == "$(uname -s)" ]; then
+if [ "Darwin" = "$(uname -s)" ]; then
     osx "$emulator"
 else
     # Here we will use package managers to determine which operating system the user is using.

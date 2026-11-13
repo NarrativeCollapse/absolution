@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
 # This script install Redox in the free space of your storage device
 # and add a boot entry (if you are using the systemd-boot boot loader)
@@ -18,7 +18,7 @@ then
     exit 1
 fi
 
-eval $(make setenv)
+eval "$(make setenv)"
 
 IMAGE="${BUILD}/filesystem.img"
 set -x
@@ -36,8 +36,8 @@ fi
 
 BOOTLOADER="recipes/core/bootloader/target/${ARCH}-unknown-redox/stage/usr/lib/boot/bootloader.efi"
 set -x
-sudo mkdir -pv "${ESP}/EFI" "${ESP}/loader/entries"
-sudo cp -v "${BOOTLOADER}" "${ESP}/EFI/redox.efi"
+sudo mkdir -p "${ESP}/EFI" "${ESP}/loader/entries"
+sudo cp "${BOOTLOADER}" "${ESP}/EFI/redox.efi"
 sudo tee "${ESP}/loader/entries/redox.conf" <<EOF
 title Redox OS
 efi /EFI/redox.efi

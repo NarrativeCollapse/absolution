@@ -181,11 +181,11 @@ function cookbook_cargo_build {
     bin_flags="${bin_flags:-}"
     bin_name="${bin_name:-$(basename "${COOKBOOK_CARGO_PATH}")}"
     bin_final_name="${bin_final_name:-${recipe}_${bin_name//_/-}}"
-    mkdir -pv "${COOKBOOK_STAGE}/usr/bin"
+    mkdir -p "${COOKBOOK_STAGE}/usr/bin"
     "${COOKBOOK_CARGO}" build \
         --manifest-path "${COOKBOOK_SOURCE}${COOKBOOK_CARGO_PATH:+/$COOKBOOK_CARGO_PATH}/Cargo.toml" \
         ${bin_flags} ${build_flags} -j "${COOKBOOK_MAKE_JOBS}" ${COOKBOOK_CARGO_FLAGS[@]}
-    cp -v \
+    cp \
         "target/${TARGET}/${build_type}/${bin_dir}/${bin_name}" \
         "${COOKBOOK_STAGE}/usr/bin/${bin_final_name}"
     unset bin_name bin_flags bin_dir bin_final_name
@@ -203,7 +203,7 @@ function cookbook_cargo_examples {
 # helper for installing binaries that are cargo packages
 function cookbook_cargo_packages {
     recipe="$(basename "${COOKBOOK_RECIPE}")"
-    mkdir -pv "${COOKBOOK_STAGE}/usr/bin"
+    mkdir -p "${COOKBOOK_STAGE}/usr/bin"
     for package in "$@"
     do
         bin_name="${package}" bin_flags="--package ${package}" bin_final_name="${package//_/-}" cookbook_cargo_build
@@ -213,7 +213,7 @@ function cookbook_cargo_packages {
 # helper for installing binaries that are cargo packages that are prefixed
 function cookbook_cargo_packages_prefixed {
     recipe="$(basename "${COOKBOOK_RECIPE}")"
-    mkdir -pv "${COOKBOOK_STAGE}/usr/bin"
+    mkdir -p "${COOKBOOK_STAGE}/usr/bin"
     for package in "$@"
     do
         bin_name="${package}" bin_flags="--package ${package}" cookbook_cargo_build
@@ -426,7 +426,8 @@ COOKBOOK_PYTHON_PIP_FLAGS=(
 function cookbook_python {
     PYTHON_INIT
     # no way to do out-of-tree build: https://github.com/pypa/setuptools/issues/3237
-    rsync -a "${COOKBOOK_SOURCE}/" ./source
+    mkdir -p ./source
+    cp -pR "${COOKBOOK_SOURCE}/." ./source
     if [ -n "${COOKBOOK_PYTHON_LEGACY_SETUP}" ]; then
         pushd ./source
         python3 ./setup.py install
@@ -435,7 +436,8 @@ function cookbook_python {
     "${COOKBOOK_PYTHON}" -m pip install --prefix="${COOKBOOK_STAGE}/usr" \
     "./source${COOKBOOK_PYTHON_PYPROJECT_PATH:+/$COOKBOOK_PYTHON_PYPROJECT_PATH}" \
     "${COOKBOOK_PYTHON_PIP_FLAGS[@]}" "$@"
-    rsync -av "${COOKBOOK_BUILD}/${COOKBOOK_STAGE}/usr/" "${COOKBOOK_STAGE}/usr"
+    mkdir -p "${COOKBOOK_STAGE}/usr"
+    cp -pR "${COOKBOOK_BUILD}/${COOKBOOK_STAGE}/usr/." "${COOKBOOK_STAGE}/usr"
 }
 "#;
 
@@ -489,7 +491,7 @@ for dir in "${COOKBOOK_STAGE}/lib" "${COOKBOOK_STAGE}/usr/lib"
 do
     if [ -d "${dir}" ]
     then
-        find "${dir}" -type f -name '*.la' -exec rm -fv {} ';'
+        find "${dir}" -type f -name '*.la' -exec rm -f {} ';'
         if [ -z "${COOKBOOK_NOSTRIP}" ]
         then
             strip_directory "${dir}"
@@ -502,7 +504,7 @@ for file in .crates.toml .crates2.json
 do
     if [ -f "${COOKBOOK_STAGE}/${file}" ]
     then
-        rm -v "${COOKBOOK_STAGE}/${file}"
+        rm -f "${COOKBOOK_STAGE}/${file}"
     fi
 done
 
@@ -511,24 +513,36 @@ for dir in "${COOKBOOK_STAGE}/share/metainfo" "${COOKBOOK_STAGE}/usr/share/metai
 do
     if [ -d "${dir}" ]
     then
-        find "${dir}" -type f -name '*.xml' -exec sed -i 's|</component>|<pkgname>'"${COOKBOOK_NAME}"'</pkgname></component>|g' {} ';'
+        # sed -i is not portable (BSD sed needs an argument), so edit via a copy.
+        find "${dir}" -type f -name '*.xml' | while IFS= read -r xml; do
+            sed 's|</component>|<pkgname>'"${COOKBOOK_NAME}"'</pkgname></component>|g' "${xml}" > "${xml}.tmp"
+            mv "${xml}.tmp" "${xml}"
+        done
     fi
 done
 "#;
 
+/// Kill every descendant of `$PID`. POSIX `sh`, `ps -A -o` and `awk` only;
+/// `ps --ppid` is a GNU extension.
 pub static KILL_ALL_PID: &str = r#"
-THISPID=$$
-CHILDREN=$(ps -o pid= --ppid $PID | grep -v $THISPID);
+self=$$
+descendants=$(ps -A -o pid= -o ppid= | awk -v root="$PID" -v self="$self" '
+    { parent[$1] = $2; pids[NR] = $1 }
+    END {
+        for (i = 1; i <= NR; i++) {
+            pid = pids[i]
+            if (pid == self) continue
+            # Walk up the parent chain; a pid whose chain reaches root is a descendant.
+            for (p = parent[pid]; p != "" && p != 0 && p != 1; p = parent[p]) {
+                if (p == root) { print pid; break }
+                if (++depth[pid] > 1000) break
+            }
+        }
+    }')
 
-ALL_DESCENDANTS='';
-
-while [ -n "$CHILDREN" ]; do
-    ALL_DESCENDANTS="$ALL_DESCENDANTS $CHILDREN";
-    CHILDREN=$(ps -o pid= --ppid $(echo $CHILDREN) | tr '\n' ' ');
-done;
-
-if [ -n "$ALL_DESCENDANTS" ]; then
-    kill $ALL_DESCENDANTS;
+if [ -n "$descendants" ]; then
+    # Whitespace-separated PIDs; splitting them is intended.
+    kill $descendants 2>/dev/null
 fi
 
 # Ask the compiler cache to shut down cleanly rather than killing every
@@ -537,3 +551,42 @@ if command -v sccache >/dev/null 2>&1; then
     sccache --stop-server >/dev/null 2>&1 || true
 fi
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::process::{Command, Stdio};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn kill_all_pid_kills_grandchildren_with_posix_tools() {
+        // A shell whose own children keep it alive until they are killed.
+        let mut parent = Command::new("sh")
+            .arg("-c")
+            .arg("sleep 60 & sleep 60 & wait")
+            .spawn()
+            .unwrap();
+        std::thread::sleep(Duration::from_millis(200));
+
+        let status = Command::new("sh")
+            .arg("-c")
+            .arg(KILL_ALL_PID.replace("$PID", &parent.id().to_string()))
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .unwrap();
+        assert!(status.success());
+
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            if parent.try_wait().unwrap().is_some() {
+                break;
+            }
+            if Instant::now() > deadline {
+                let _ = parent.kill();
+                panic!("the sleeps were not killed");
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+}

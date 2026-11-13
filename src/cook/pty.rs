@@ -3,7 +3,7 @@ use std::io::{self, PipeReader, PipeWriter, Read, Write};
 use std::os::fd::FromRawFd;
 use std::os::unix::{io::AsRawFd, io::RawFd, process::CommandExt};
 use std::process::{Child, Command};
-use std::{fs::File, mem, ptr, time::Duration};
+use std::{fs::File, mem, time::Duration};
 
 use crate::{Error, Result, wrap_io_err};
 
@@ -145,44 +145,48 @@ impl Default for PtySize {
     }
 }
 
+/// `ptsname` returns a pointer into static storage, so calls must not overlap.
+static PTSNAME_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Open a pseudo-terminal pair with the POSIX interfaces (`posix_openpt`,
+/// `grantpt`, `unlockpt`, `ptsname`), which unlike `openpty` are part of the
+/// standard and need no extra library.
 fn openpty(size: PtySize) -> Result<(UnixMasterPty, UnixSlavePty)> {
-    let mut master: RawFd = -1;
-    let mut slave: RawFd = -1;
-
-    let mut size = winsize {
-        ws_row: size.rows,
-        ws_col: size.cols,
-        ws_xpixel: size.pixel_width,
-        ws_ypixel: size.pixel_height,
+    let master_fd = unsafe { libc::posix_openpt(libc::O_RDWR | libc::O_NOCTTY) };
+    if master_fd < 0 {
+        return Err(Error::from_last_io_error("Opening pty master"));
+    }
+    // Owned from here on, so it is closed on every error path below.
+    let master = UnixMasterPty {
+        fd: PtyFd(unsafe { File::from_raw_fd(master_fd) }),
     };
-
-    let result = unsafe {
-        // BSDish systems may require mut pointers to some args
-        #[allow(clippy::unnecessary_mut_passed)]
-        libc::openpty(
-            &mut master,
-            &mut slave,
-            ptr::null_mut(),
-            ptr::null_mut(),
-            &mut size,
-        )
-    };
-
-    if result != 0 {
-        return Err(Error::from_last_io_error("Opening openpty"));
+    if unsafe { libc::grantpt(master_fd) } != 0 {
+        return Err(Error::from_last_io_error("Granting pty"));
+    }
+    if unsafe { libc::unlockpt(master_fd) } != 0 {
+        return Err(Error::from_last_io_error("Unlocking pty"));
     }
 
-    let master = UnixMasterPty {
-        fd: PtyFd(unsafe { File::from_raw_fd(master) }),
+    let slave_path = {
+        let _guard = PTSNAME_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let name = unsafe { libc::ptsname(master_fd) };
+        if name.is_null() {
+            return Err(Error::from_last_io_error("Getting pty slave name"));
+        }
+        unsafe { std::ffi::CStr::from_ptr(name) }.to_owned()
     };
+    let slave_fd = unsafe { libc::open(slave_path.as_ptr(), libc::O_RDWR | libc::O_NOCTTY) };
+    if slave_fd < 0 {
+        return Err(Error::from_last_io_error("Opening pty slave"));
+    }
     let slave = UnixSlavePty {
-        fd: PtyFd(unsafe { File::from_raw_fd(slave) }),
+        fd: PtyFd(unsafe { File::from_raw_fd(slave_fd) }),
     };
 
+    master.fd.resize(size)?;
+
     // Ensure that these descriptors will get closed when we execute
-    // the child process.  This is done after constructing the Pty
-    // instances so that we ensure that the Ptys get drop()'d if
-    // the cloexec() functions fail (unlikely!).
+    // the child process.
     cloexec(master.fd.as_raw_fd())?;
     cloexec(slave.fd.as_raw_fd())?;
 
@@ -400,5 +404,29 @@ impl UnixMasterPty {
                 .map_err(wrap_io_err!("Cloning pty fd"))?,
         );
         Ok(Box::new(fd))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn posix_pty_pair_carries_data_and_size() {
+        let size = PtySize {
+            rows: 40,
+            cols: 100,
+            pixel_width: 0,
+            pixel_height: 0,
+        };
+        let (master, mut slave) = openpty(size).unwrap();
+        assert_eq!(master.get_size().unwrap(), size);
+
+        slave.fd.write_all(b"ping\n").unwrap();
+        let mut reader = master.try_clone_reader().unwrap();
+        let mut buf = [0u8; 16];
+        let n = reader.read(&mut buf).unwrap();
+        // The line discipline may turn "\n" into "\r\n".
+        assert!(buf[..n].starts_with(b"ping"), "{:?}", &buf[..n]);
     }
 }
