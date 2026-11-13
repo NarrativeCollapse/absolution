@@ -1,37 +1,42 @@
-use blake3::Hash;
-use serde::{Serialize, de::DeserializeOwned};
+//! File system, process and hashing helpers with path-carrying errors.
+
 use std::{
     collections::BTreeSet,
     fs,
     io::{self, Write},
     path::{Path, PathBuf},
-    process::{self, Command, Stdio},
+    process::{Command, Stdio},
     time::SystemTime,
 };
+
+use serde::{Serialize, de::DeserializeOwned};
 use walkdir::{DirEntry, WalkDir};
 
 use crate::{
     Error, Result, bail_other_err,
     config::translate_mirror,
     cook::pty::{PtyOut, spawn_to_pipe},
-    wrap_io_err, wrap_other_err,
+    wrap_io_err,
 };
 
-//TODO: pub(crate) for all of these functions
+// Directories and files
 
+/// Remove a file, or a directory and everything in it.
 pub fn remove_all(path: &Path) -> Result<()> {
     if path.is_dir() {
         fs::remove_dir_all(path)
     } else {
         fs::remove_file(path)
     }
-    .map_err(wrap_io_err!(path, "Removing all"))
+    .map_err(wrap_io_err!(path, "Removing"))
 }
 
+/// Create a directory and its missing parents.
 pub fn create_dir(dir: &Path) -> Result<()> {
-    fs::create_dir_all(dir).map_err(wrap_io_err!(dir, "Recursively creating dir"))
+    fs::create_dir_all(dir).map_err(wrap_io_err!(dir, "Creating directory"))
 }
 
+/// Create a directory, emptying it first if it already exists.
 pub fn create_dir_clean(dir: &Path) -> Result<()> {
     if dir.is_dir() {
         remove_all(dir)?;
@@ -39,63 +44,63 @@ pub fn create_dir_clean(dir: &Path) -> Result<()> {
     create_dir(dir)
 }
 
-pub fn create_target_dir(recipe_dir: &Path, target: &'static str) -> Result<PathBuf> {
+/// Create and return `<recipe_dir>/target/<target>`.
+pub fn create_target_dir(recipe_dir: &Path, target: &str) -> Result<PathBuf> {
     let target_dir = recipe_dir.join("target").join(target);
-    if !target_dir.is_dir() {
-        create_dir(&target_dir)?;
-    }
+    create_dir(&target_dir)?;
     Ok(target_dir)
 }
 
-pub fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
-    fs::create_dir_all(&dst)?;
+/// Recursively copy the contents of `src` into `dst`.
+pub fn copy_dir_all(src: &Path, dst: &Path) -> io::Result<()> {
+    fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {
         let entry = entry?;
-        let ty = entry.file_type()?;
-        if ty.is_dir() {
-            copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        let target = dst.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir_all(&entry.path(), &target)?;
         } else {
-            fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
+            fs::copy(entry.path(), target)?;
         }
     }
     Ok(())
 }
 
-pub fn move_dir_all_fn<'a>(
-    src: impl AsRef<Path>,
-    mv: &'a Box<impl Fn(PathBuf) -> Option<&'a Path>>,
+/// Move files out of `src` into other directory trees.
+///
+/// `destination` is called with each file's path relative to `src`. When it
+/// returns a directory, the file is moved there under the same relative path;
+/// when it returns `None` the file stays where it is.
+pub fn move_files_matching<'a>(
+    src: &Path,
+    destination: &dyn Fn(&Path) -> Option<&'a Path>,
 ) -> io::Result<()> {
-    move_dir_all_inner_fn(&src, &src, mv)
-}
-
-fn move_dir_all_inner_fn<'a>(
-    src: impl AsRef<Path>,
-    srcrel: impl AsRef<Path>,
-    mv: &'a Box<impl Fn(PathBuf) -> Option<&'a Path>>,
-) -> io::Result<()> {
-    let mut files = Vec::new();
-    for entry in fs::read_dir(&src)? {
-        let entry = entry?;
-        let ty = entry.file_type()?;
-        if ty.is_dir() {
-            move_dir_all_inner_fn(entry.path(), srcrel.as_ref(), mv)?;
-        } else {
-            let path: PathBuf = entry.path();
-            let Ok(relpath) = path.strip_prefix(&srcrel) else {
+    fn visit<'a>(
+        root: &Path,
+        dir: &Path,
+        destination: &dyn Fn(&Path) -> Option<&'a Path>,
+    ) -> io::Result<()> {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if entry.file_type()?.is_dir() {
+                visit(root, &path, destination)?;
+                continue;
+            }
+            let Ok(relative) = path.strip_prefix(root) else {
                 continue;
             };
-
-            if let Some(dst) = mv(relpath.to_path_buf()) {
-                files.push((entry.path(), relpath.to_path_buf(), dst.to_owned()));
+            if let Some(dst_root) = destination(relative) {
+                let dst = dst_root.join(relative);
+                if let Some(parent) = dst.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                fs::rename(&path, &dst)?;
             }
         }
+        Ok(())
     }
-    for (src, srcrel, dst) in files {
-        let path = dst.join(&srcrel);
-        fs::create_dir_all(path.parent().unwrap())?;
-        std::fs::rename(&src, &path)?;
-    }
-    Ok(())
+    visit(src, src, destination)
 }
 
 pub fn symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> Result<()> {
@@ -103,530 +108,303 @@ pub fn symlink(original: impl AsRef<Path>, link: impl AsRef<Path>) -> Result<()>
         .map_err(wrap_io_err!(link.as_ref(), "Creating symlink"))
 }
 
-pub fn modified_is_newer(src: &Path, dst: &Path) -> bool {
-    match (fs::metadata(src), fs::metadata(dst)) {
-        (Ok(src_meta), Ok(dst_meta)) => match (src_meta.modified(), dst_meta.modified()) {
-            (Ok(src_time), Ok(dst_time)) => src_time > dst_time,
-            (Ok(_), Err(_)) => true,
-            _ => false,
-        },
-        (Ok(_), Err(_)) => true,
-        _ => false,
-    }
-}
-
-fn modified_inner(path: &Path, metadata: fs::Metadata) -> Result<SystemTime> {
-    metadata
-        .modified()
-        .map_err(wrap_io_err!(path, "Reading modified time"))
-}
-
-pub fn modified(path: &Path) -> Result<SystemTime> {
-    let metadata = fs::metadata(path).map_err(wrap_io_err!(path, "Reading metadata"))?;
-    modified_inner(path, metadata)
-}
-
-pub fn modified_all(
-    path: &Vec<PathBuf>,
-    func: fn(path: &Path) -> Result<SystemTime>,
-) -> Result<SystemTime> {
-    let mut newest = SystemTime::UNIX_EPOCH;
-    for entry_res in path {
-        let modified = func(entry_res)?;
-        if modified > newest {
-            newest = modified;
-        }
-    }
-    Ok(newest)
-}
-
-pub fn modified_all_btree<'a>(
-    path: impl Iterator<Item = &'a Path>,
-    func: fn(path: &Path) -> Result<SystemTime>,
-) -> Result<SystemTime> {
-    let mut newest = SystemTime::UNIX_EPOCH;
-    for entry_res in path {
-        let modified = func(entry_res)?;
-        if modified > newest {
-            newest = modified;
-        }
-    }
-    Ok(newest)
-}
-
-fn modified_dir_inner<F: FnMut(&DirEntry) -> bool>(dir: &Path, filter: F) -> Result<SystemTime> {
-    let mut newest = modified(dir)?;
-    for entry_res in WalkDir::new(dir).into_iter().filter_entry(filter) {
-        let entry = entry_res?;
-        let meta = entry.metadata()?;
-        if meta.is_dir() {
-            continue;
-        }
-        let modified = modified_inner(entry.path(), meta)?;
-        if modified > newest {
-            newest = modified;
-        }
-    }
-    Ok(newest)
-}
-
-pub fn modified_dir(dir: &Path) -> Result<SystemTime> {
-    modified_dir_inner(dir, |_| true)
-}
-
-pub fn modified_dir_ignore_git(dir: &Path) -> Result<SystemTime> {
-    modified_dir_inner(dir, |entry| {
-        entry
-            .file_name()
-            .to_str()
-            .map(|s| s != ".git")
-            .unwrap_or(true)
-    })
-}
-
-pub fn check_files_present(dir: &Path, expected_files: &BTreeSet<&str>) -> Result<bool> {
-    let entries = fs::read_dir(dir).map_err(wrap_io_err!(dir, "Reading list files"))?;
-
-    let mut matches = 0;
-    for entry_res in entries {
-        let entry = entry_res.map_err(wrap_io_err!(dir, "Reading file entry"))?;
-
-        let filename = entry.file_name();
-        let Some(filename) = filename.to_str() else {
-            continue;
-        };
-
-        if expected_files.contains(&filename) {
-            matches += 1
-        } else if filename.starts_with('.') {
-            continue;
-        } else {
-            return Ok(false);
-        }
-    }
-
-    Ok(matches == expected_files.len())
-}
-
 pub fn rename(src: &Path, dst: &Path) -> Result<()> {
     fs::rename(src, dst).map_err(wrap_io_err!(src, dst, "Renaming"))
-}
-
-pub fn run_command(mut command: process::Command, stdout_pipe: &PtyOut) -> Result<()> {
-    let status = spawn_to_pipe(&mut command, stdout_pipe)?
-        .wait()
-        .map_err(wrap_io_err!("waiting to exit"))?;
-
-    if !status.success() {
-        return Err(Error::Command(command, status));
-    }
-
-    Ok(())
-}
-
-pub fn run_command_stdin(
-    mut command: process::Command,
-    stdin_data: &[u8],
-    stdout_pipe: &PtyOut,
-) -> Result<()> {
-    command.stdin(Stdio::piped());
-    let mut child = spawn_to_pipe(&mut command, stdout_pipe)?;
-
-    if let Some(ref mut stdin) = child.stdin {
-        stdin
-            .write_all(stdin_data)
-            .map_err(wrap_io_err!("Writing to stdin"))?;
-    } else {
-        bail_other_err!("stdin is not captured");
-    }
-
-    let status = child.wait().map_err(wrap_io_err!("Spawning"))?;
-
-    if !status.success() {
-        return Err(Error::Command(command, status));
-    }
-
-    Ok(())
-}
-
-pub fn serialize_and_write<T: Serialize>(file_path: &Path, content: &T) -> Result<()> {
-    let toml_content = toml::to_string(content).map_err(|err| {
-        wrap_other_err!(
-            "Failed to serialize content for {:?}: {}",
-            file_path.display(),
-            err
-        )()
-    })?;
-
-    fs::write(file_path, toml_content).map_err(wrap_io_err!(file_path, "Writing to file"))?;
-    Ok(())
-}
-
-pub fn read_toml<T: DeserializeOwned>(file_path: &Path) -> Result<T> {
-    // TODO: General error rather than from PackageError?
-    toml::from_str(&read_to_string(file_path)?)
-        .map_err(|e| Error::Package(pkg::PackageError::Parse(e, Some(file_path.to_path_buf()))))
-}
-
-pub fn offline_check_exists(path: &PathBuf) -> Result<()> {
-    if !path.exists() {
-        bail_other_err!(
-            "{path:?} is not exist and unable to continue in offline mode",
-            path = path.display(),
-        );
-    }
-    Ok(())
-}
-
-pub fn download_wget(url: &str, dest: &PathBuf, logger: &PtyOut) -> Result<()> {
-    if !dest.is_file() {
-        let dest_tmp = PathBuf::from(format!("{}.tmp", dest.display()));
-        let mut command = Command::new("wget");
-        command.arg(translate_mirror(url));
-        command.arg("--continue").arg("-O").arg(&dest_tmp);
-        run_command(command, logger)?;
-        rename(&dest_tmp, dest)?;
-    }
-    Ok(())
 }
 
 pub fn read_to_string(path: &Path) -> Result<String> {
     fs::read_to_string(path).map_err(wrap_io_err!(path, "Reading file"))
 }
 
-pub fn get_file_blake3(path: &PathBuf) -> Result<String> {
-    get_blake3(path).map(|s| s.to_hex().to_string())
-}
-
-fn get_blake3(path: &PathBuf) -> Result<Hash> {
-    let mut f = fs::File::open(path).map_err(wrap_io_err!(path, "Opening file for blake3"))?;
-    let hash = blake3::Hasher::new()
-        .update_reader(&mut f)
-        .map_err(wrap_io_err!(path, "Reading file for blake3"))?
-        .finalize();
-    Ok(hash)
-}
-
-fn get_blake3_str(s: &str) -> Result<Hash> {
-    let mut f = s.as_bytes();
-    let hash = blake3::Hasher::new()
-        .update_reader(&mut f)
-        .map_err(wrap_io_err!("Reading string for blake3"))?
-        .finalize();
-    Ok(hash)
-}
-
-/// get combined hashes from files and scripts
-pub fn get_combined_blake3(
-    dir: &PathBuf,
-    files: &Vec<String>,
-    contents: &Vec<String>,
-) -> Result<String> {
-    if files.is_empty() && contents.is_empty() {
-        // pkgutils allow omiting the field with empty string
-        return Ok("".into());
-    }
-
-    let mut combined_bytes: [u8; _] = [0; blake3::OUT_LEN];
-
-    for file in files {
-        let hash = get_blake3(&dir.join(file))?;
-        let hash_bytes = hash.as_bytes();
-
-        for i in 0..hash_bytes.len() {
-            combined_bytes[i] = (combined_bytes[i].rotate_left(2)) ^ hash_bytes[i];
-        }
-    }
-    for s in contents {
-        let hash = get_blake3_str(s)?;
-        let hash_bytes = hash.as_bytes();
-
-        for i in 0..hash_bytes.len() {
-            combined_bytes[i] = (combined_bytes[i].rotate_left(2)) ^ hash_bytes[i];
-        }
-    }
-
-    Ok(Hash::from(combined_bytes).to_hex().to_string())
-}
-
-/// get commit rev and return if it's detached or not
-pub fn get_git_head_rev(dir: &PathBuf) -> Result<(String, bool)> {
-    let git_head = dir.join(".git/HEAD");
-    let head_str = read_to_string(&git_head)?;
-    if head_str.starts_with("ref: ") {
-        let entry = head_str["ref: ".len()..].trim_end();
-        let git_ref = dir.join(".git").join(entry);
-        let ref_str = if git_ref.is_file() {
-            read_to_string(&git_ref)?
-        } else {
-            get_git_ref_entry(dir, entry)?
+/// Whether the entries of `dir` are exactly `expected`, ignoring dotfiles.
+pub fn check_files_present(dir: &Path, expected: &BTreeSet<&str>) -> Result<bool> {
+    let mut matches = 0;
+    for entry in fs::read_dir(dir).map_err(wrap_io_err!(dir, "Listing directory"))? {
+        let entry = entry.map_err(wrap_io_err!(dir, "Reading directory entry"))?;
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            continue;
         };
-        Ok((ref_str.trim().to_string(), false))
-    } else {
-        Ok((head_str.trim().to_string(), true))
+        if expected.contains(name) {
+            matches += 1;
+        } else if !name.starts_with('.') {
+            return Ok(false);
+        }
+    }
+    Ok(matches == expected.len())
+}
+
+/// Fail with an offline-mode explanation when `path` does not exist.
+pub fn offline_check_exists(path: &Path) -> Result<()> {
+    if !path.exists() {
+        bail_other_err!(
+            "{:?} does not exist and cannot be fetched in offline mode",
+            path.display()
+        );
+    }
+    Ok(())
+}
+
+// Modification times
+
+/// Whether `src` was modified after `dst`. A missing `dst` counts as older;
+/// a missing `src` is never newer.
+pub fn modified_is_newer(src: &Path, dst: &Path) -> bool {
+    match (modified(src), modified(dst)) {
+        (Ok(src), Ok(dst)) => src > dst,
+        (Ok(_), Err(_)) => true,
+        (Err(_), _) => false,
     }
 }
 
-/// get commit from "rev" which either a full commit hash or a tag name
-pub fn get_git_tag_rev(dir: &PathBuf, tag: &str, logger: &PtyOut) -> Result<String> {
-    if tag.len() == 40 && tag.chars().all(|f| f.is_ascii_hexdigit()) {
-        return Ok(tag.to_string());
-    }
-    let r = get_git_ref_entry(dir, &format!("refs/tags/{tag}"));
-    match r {
-        Ok(r) => Ok(r),
-        Err(_) => {
-            // probably need to run "git gc"
-            let mut command = Command::new("git");
-            command.arg("-C").arg(dir);
-            command.arg("gc");
-            run_command(command, logger)?;
-            get_git_ref_entry(dir, &format!("refs/tags/{tag}"))
-        }
-    }
+pub fn modified(path: &Path) -> Result<SystemTime> {
+    fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .map_err(wrap_io_err!(path, "Reading modified time"))
 }
 
-pub fn get_git_ref_entry(dir: &PathBuf, entry: &str) -> Result<String> {
-    // https://git-scm.com/book/en/v2/Git-Internals-Maintenance-and-Data-Recovery
-    let git_refs = dir.join(".git/packed-refs");
-    let refs_str = read_to_string(&git_refs)?;
-    let mut lines = refs_str.lines();
-    while let Some(line) = lines.next() {
-        if line.contains(entry) {
-            let mut sha = line
-                .split_whitespace()
-                .next()
-                .ok_or_else(wrap_other_err!("Packed-refs line is malformed"))?;
-            if let Some(next_line) = lines.next()
-                && next_line.starts_with('^')
-            {
-                sha = &next_line[1..];
-            }
-            return Ok(sha.to_string());
-        }
+/// The newest modification time among `paths`, all of which must exist.
+pub fn modified_newest(paths: &[PathBuf]) -> Result<SystemTime> {
+    let mut newest = SystemTime::UNIX_EPOCH;
+    for path in paths {
+        newest = newest.max(modified(path)?);
     }
-
-    Err(wrap_other_err!("Could not find a rev for {}", entry)())
+    Ok(newest)
 }
 
-/// get commit rev after fetch
-pub fn get_git_fetch_rev(dir: &PathBuf, remote_url: &str, remote_branch: &str) -> Result<String> {
-    let git_fetch_head = dir.join(".git/FETCH_HEAD");
-
-    let fetch_head_content = read_to_string(&git_fetch_head)?;
-
-    let expected_comment_part = format!("branch '{}' of {}", remote_branch, remote_url);
-
-    for line in fetch_head_content.lines() {
-        if line.contains(&expected_comment_part) && !line.contains("not-for-merge") {
-            let sha = line
-                .split_whitespace()
-                .next()
-                .ok_or_else(wrap_other_err!("FETCH_HEAD line is malformed"))?;
-
-            return Ok(sha.to_string());
+fn modified_dir_filtered(dir: &Path, filter: impl FnMut(&DirEntry) -> bool) -> Result<SystemTime> {
+    let mut newest = modified(dir)?;
+    for entry in WalkDir::new(dir).into_iter().filter_entry(filter) {
+        let entry = entry?;
+        let metadata = entry.metadata()?;
+        if metadata.is_dir() {
+            continue;
         }
+        let time = metadata
+            .modified()
+            .map_err(wrap_io_err!(entry.path(), "Reading modified time"))?;
+        newest = newest.max(time);
     }
-
-    Err(wrap_other_err!(
-        "Could not find a fetch target for tracking {}",
-        expected_comment_part
-    )())
+    Ok(newest)
 }
 
-#[derive(Default, Debug)]
-pub struct GitRemoteTracking {
-    /// from .git/HEAD
-    pub local_branch: String,
-    /// from .git/config -> [branch <local_branch_name>].merge
-    pub tracking_branch: String,
-    /// from .git/config -> [branch <local_branch_name>].remote (usually "origin")
-    pub remote_name: String,
-    /// from refs/remotes/<remote_name>/HEAD (the default branch on remote)
-    pub remote_branch: String,
-    /// from .git/config -> [remote <remote_branch_name>].url
-    pub remote_url: String,
+/// The newest modification time of `dir` itself and of any file inside it.
+pub fn modified_dir(dir: &Path) -> Result<SystemTime> {
+    modified_dir_filtered(dir, |_| true)
 }
 
-impl GitRemoteTracking {
-    pub fn detached(rev: String) -> Self {
-        Self {
-            local_branch: rev,
-            ..Default::default()
-        }
-    }
-    pub fn check_updated(&self, url: &str, branch: &Option<String>) -> bool {
-        if self.local_branch != self.tracking_branch {
-            return false;
-        }
-        if let Some(branch) = branch
-            && branch != &self.tracking_branch
-        {
-            return false;
-        }
-        if branch.is_none() && self.remote_branch != self.tracking_branch {
-            return false;
-        }
-        if self.remote_name != "origin" || self.remote_url != chop_dot_git(url) {
-            return false;
-        }
-        true
-    }
+/// Like [`modified_dir`], skipping `.git` directories.
+pub fn modified_dir_ignore_git(dir: &Path) -> Result<SystemTime> {
+    modified_dir_filtered(dir, |entry| entry.file_name() != ".git")
 }
 
-pub fn get_git_remote_tracking(dir: &PathBuf) -> Result<GitRemoteTracking> {
-    let git_head = dir.join(".git/HEAD");
-    let local_branch = {
-        let head_content = read_to_string(&git_head)?;
-        if !head_content.starts_with("ref: ") {
-            let rev = head_content.trim_end().to_string();
-            return Ok(GitRemoteTracking::detached(rev));
-        }
-        let path = &head_content["ref: ".len()..];
-        get_git_branch_name(path.trim_end())?
+// Processes
+
+/// Run a command to completion, failing if it exits unsuccessfully.
+pub fn run_command(mut command: Command, logger: &PtyOut) -> Result<()> {
+    let status = spawn_to_pipe(&mut command, logger)?
+        .wait()
+        .map_err(wrap_io_err!("Waiting for command"))?;
+    if !status.success() {
+        return Err(Error::command(command, status));
+    }
+    Ok(())
+}
+
+/// Like [`run_command`], feeding `stdin_data` to the command's stdin.
+pub fn run_command_stdin(mut command: Command, stdin_data: &[u8], logger: &PtyOut) -> Result<()> {
+    command.stdin(Stdio::piped());
+    let mut child = spawn_to_pipe(&mut command, logger)?;
+
+    let Some(mut stdin) = child.stdin.take() else {
+        bail_other_err!("stdin of {command:?} is not captured");
     };
+    let written = stdin.write_all(stdin_data);
+    // Close stdin so the child sees EOF, and reap it even if writing failed.
+    drop(stdin);
+    let status = child.wait().map_err(wrap_io_err!("Waiting for command"))?;
 
-    let git_config = dir.join(".git/config");
-    let config_content = read_to_string(&git_config)?;
+    if !status.success() {
+        return Err(Error::command(command, status));
+    }
+    written.map_err(wrap_io_err!("Writing to stdin"))
+}
 
-    let branch_section = format!("[branch \"{}\"]", local_branch);
-    let mut remote_name: Option<String> = None;
-    let mut remote_branch: Option<String> = None;
-    let mut parsing_branch_section = false;
+/// Download `url` to `dest` unless `dest` already exists. The download goes
+/// to `<dest>.tmp` first so an interrupted transfer is resumed, not trusted.
+pub fn download_wget(url: &str, dest: &Path, logger: &PtyOut) -> Result<()> {
+    if dest.is_file() {
+        return Ok(());
+    }
+    let mut dest_tmp = dest.as_os_str().to_owned();
+    dest_tmp.push(".tmp");
+    let dest_tmp = PathBuf::from(dest_tmp);
 
-    for line in config_content.lines().map(|l| l.trim()) {
-        if line.is_empty() {
-            continue;
-        }
+    let mut command = Command::new("wget");
+    command.arg(translate_mirror(url));
+    command.arg("--continue").arg("-O").arg(&dest_tmp);
+    run_command(command, logger)?;
+    rename(&dest_tmp, dest)
+}
 
-        if line == branch_section {
-            parsing_branch_section = true;
-            continue;
-        }
+// TOML
 
-        if parsing_branch_section {
-            if line.starts_with('[') {
-                break;
-            }
-            if line.starts_with("remote = ") {
-                remote_name = Some(line["remote = ".len()..].trim().to_string());
-            }
-            if line.starts_with("merge = ") {
-                remote_branch = Some(get_git_branch_name(line["merge = ".len()..].trim())?);
-            }
-        }
+pub fn serialize_and_write<T: Serialize>(path: &Path, content: &T) -> Result<()> {
+    let toml = toml::to_string(content).map_err(|e| {
+        Error::Other(format!(
+            "Failed to serialize content for {:?}: {e}",
+            path.display()
+        ))
+    })?;
+    fs::write(path, toml).map_err(wrap_io_err!(path, "Writing file"))
+}
+
+pub fn read_toml<T: DeserializeOwned>(path: &Path) -> Result<T> {
+    toml::from_str(&read_to_string(path)?)
+        .map_err(|e| Error::Package(pkg::PackageError::Parse(e, Some(path.to_path_buf()))))
+}
+
+// Hashing
+
+fn file_blake3(path: &Path) -> Result<blake3::Hash> {
+    let mut file = fs::File::open(path).map_err(wrap_io_err!(path, "Opening file for blake3"))?;
+    let mut hasher = blake3::Hasher::new();
+    hasher
+        .update_reader(&mut file)
+        .map_err(wrap_io_err!(path, "Reading file for blake3"))?;
+    Ok(hasher.finalize())
+}
+
+/// The blake3 hash of a file, as lowercase hex.
+pub fn get_file_blake3(path: &Path) -> Result<String> {
+    file_blake3(path).map(|hash| hash.to_hex().to_string())
+}
+
+/// One hash identifying an ordered list of files (relative to `dir`) followed
+/// by an ordered list of literal strings. Returns an empty string when there
+/// is nothing to hash, which is how an absent identifier is stored.
+pub fn get_combined_blake3(dir: &Path, files: &[String], contents: &[String]) -> Result<String> {
+    if files.is_empty() && contents.is_empty() {
+        return Ok(String::new());
     }
 
-    let remote_name = remote_name.ok_or_else(wrap_other_err!(
-        "Branch {:?} is not tracking a remote",
-        local_branch
-    ))?;
-    let tracking_branch = remote_branch.unwrap_or("".into());
+    // Hash the fixed-size hash of each item, tagged by kind, so that neither
+    // reordering items nor moving bytes between adjacent items goes unnoticed.
+    let mut hasher = blake3::Hasher::new();
+    for file in files {
+        hasher.update(b"file");
+        hasher.update(file_blake3(&dir.join(file))?.as_bytes());
+    }
+    for content in contents {
+        hasher.update(b"text");
+        hasher.update(blake3::hash(content.as_bytes()).as_bytes());
+    }
+    Ok(hasher.finalize().to_hex().to_string())
+}
 
-    let remote_section = format!("[remote \"{}\"]", remote_name);
-    let mut remote_url: Option<String> = None;
-    let mut parsing_remote_section = false;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    for line in config_content.lines().map(|l| l.trim()) {
-        if line.is_empty() {
-            continue;
-        }
-
-        if line == remote_section {
-            parsing_remote_section = true;
-            continue;
-        }
-
-        if parsing_remote_section {
-            if line.starts_with('[') {
-                break;
-            }
-            if line.starts_with("url = ") {
-                let mut url = line["url = ".len()..].trim();
-                url = chop_dot_git(url);
-                remote_url = Some(url.to_string());
-            }
-        }
+    fn write(path: &Path, content: &str) {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, content).unwrap();
     }
 
-    let remote_url = remote_url.ok_or_else(wrap_other_err!(
-        "Could not find URL for remote {:?} in .git/config.",
-        remote_name
-    ))?;
-
-    let remote_branch = get_git_remote_branch(dir, &remote_name)?;
-    Ok(GitRemoteTracking {
-        local_branch,
-        tracking_branch,
-        remote_name,
-        remote_branch,
-        remote_url,
-    })
-}
-
-pub fn get_git_remote_branch(dir: &PathBuf, remote_name: &str) -> Result<String> {
-    let remote_branch = {
-        let head_path = format!(".git/refs/remotes/{remote_name}/HEAD");
-        let git_remote_head = dir.join(&head_path);
-        let head_content = read_to_string(&git_remote_head)?;
-        let path = head_content
-            .get("ref: ".len()..)
-            .ok_or_else(wrap_other_err!(
-                "Malformed content {:?} in {head_path}",
-                head_content
-            ))?;
-        get_git_branch_name(path.trim_end())?
-    };
-    Ok(remote_branch)
-}
-
-fn chop_dot_git(url: &str) -> &str {
-    if url.ends_with(".git") {
-        return &url[..url.len() - ".git".len()];
+    #[test]
+    fn combined_hash_is_empty_without_inputs() {
+        assert_eq!(get_combined_blake3(Path::new("."), &[], &[]).unwrap(), "");
     }
-    url
-}
 
-fn get_git_branch_name(branch_path: &str) -> Result<String> {
-    // TODO: incorrectly handle branch with slashes
-    Ok(branch_path
-        .split('/')
-        .next_back()
-        .ok_or_else(wrap_other_err!(
-            "Failed to parse branch name of {:?}",
-            branch_path
-        ))?
-        .to_string())
-}
+    #[test]
+    fn combined_hash_depends_on_order_content_and_kind() {
+        let tmp = tempfile::tempdir().unwrap();
+        write(&tmp.path().join("a.patch"), "aaa");
+        write(&tmp.path().join("b.patch"), "bbb");
+        let hash = |files: &[&str], contents: &[&str]| {
+            let files: Vec<String> = files.iter().map(|s| s.to_string()).collect();
+            let contents: Vec<String> = contents.iter().map(|s| s.to_string()).collect();
+            get_combined_blake3(tmp.path(), &files, &contents).unwrap()
+        };
 
-pub fn get_git_commit_date(dir: &PathBuf) -> Result<String> {
-    let mut git = process::Command::new("git");
-    git.args(["log", "-1", "--date=iso-strict-local", "--format=%ad"]);
-    git.env("TZ", "UTC");
-    git.current_dir(dir);
-    git.stdout(Stdio::piped());
+        let ab = hash(&["a.patch", "b.patch"], &[]);
+        assert_eq!(ab, hash(&["a.patch", "b.patch"], &[]));
+        assert_ne!(ab, hash(&["b.patch", "a.patch"], &[]));
+        assert_ne!(ab, hash(&["a.patch"], &[]));
+        assert_ne!(hash(&["a.patch"], &[]), hash(&["a.patch", "a.patch"], &[]));
+        assert_ne!(hash(&["a.patch"], &[]), hash(&[], &["aaa"]));
+        assert_ne!(hash(&[], &["x"]), hash(&[], &["y"]));
 
-    git.output()
-        .map_err(wrap_io_err!("Executing git log"))
-        .map(|s| String::from_utf8_lossy(&s.stdout).trim().to_string())
-}
-
-pub fn get_git_rev_before_date(dir: &PathBuf, date: &str) -> Result<String> {
-    let mut git = process::Command::new("git");
-    git.args(["rev-list", "-n", "1", &format!("--before={}", date), "HEAD"]);
-    git.current_dir(dir);
-    git.stdout(Stdio::piped());
-
-    let output = git
-        .output()
-        .map_err(wrap_io_err!("Executing git rev-list"))?;
-    let rev = String::from_utf8_lossy(&output.stdout).trim().to_string();
-
-    if rev.is_empty() {
-        return Err(Error::from(format!(
-            "No commit found before {} in {:?}",
-            date, dir
-        )));
+        let missing = get_combined_blake3(tmp.path(), &["nope".to_string()], &[]);
+        assert!(missing.is_err());
     }
-    Ok(rev)
+
+    #[test]
+    fn move_files_matching_moves_only_selected_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("stage");
+        let dev = tmp.path().join("stage.dev");
+        write(&src.join("usr/include/a.h"), "");
+        write(&src.join("usr/bin/tool"), "");
+
+        move_files_matching(&src, &|relative| {
+            relative.starts_with("usr/include").then_some(dev.as_path())
+        })
+        .unwrap();
+
+        assert!(dev.join("usr/include/a.h").is_file());
+        assert!(!src.join("usr/include/a.h").exists());
+        assert!(src.join("usr/bin/tool").is_file());
+    }
+
+    #[test]
+    fn check_files_present_requires_exact_set() {
+        let tmp = tempfile::tempdir().unwrap();
+        write(&tmp.path().join("a"), "");
+        write(&tmp.path().join(".hidden"), "");
+        assert!(check_files_present(tmp.path(), &BTreeSet::from(["a"])).unwrap());
+        assert!(!check_files_present(tmp.path(), &BTreeSet::from(["a", "b"])).unwrap());
+        assert!(!check_files_present(tmp.path(), &BTreeSet::new()).unwrap());
+    }
+
+    #[test]
+    fn modified_dir_ignore_git_skips_git_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        write(&tmp.path().join("main.c"), "");
+        write(&tmp.path().join(".git/index"), "");
+        // Make the .git file unmistakably the newest thing in the tree.
+        let future = SystemTime::now() + std::time::Duration::from_secs(3600);
+        fs::File::options()
+            .write(true)
+            .open(tmp.path().join(".git/index"))
+            .unwrap()
+            .set_modified(future)
+            .unwrap();
+
+        assert_eq!(modified_dir(tmp.path()).unwrap(), future);
+        assert!(modified_dir_ignore_git(tmp.path()).unwrap() < future);
+    }
+
+    #[test]
+    fn run_command_stdin_feeds_input_and_reports_failure() {
+        let mut ok = Command::new("sh");
+        ok.arg("-s");
+        run_command_stdin(ok, b"exit 0\n", &None).unwrap();
+
+        let mut fail = Command::new("sh");
+        fail.arg("-s");
+        let err = run_command_stdin(fail, b"exit 3\n", &None).unwrap_err();
+        assert!(matches!(err, Error::Command(..)), "{err}");
+    }
+
+    #[test]
+    fn toml_round_trip() {
+        type Map = std::collections::BTreeMap<String, i32>;
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("x.toml");
+        let value = Map::from([("k".to_string(), 1)]);
+        serialize_and_write(&path, &value).unwrap();
+        assert_eq!(read_toml::<Map>(&path).unwrap(), value);
+        assert!(read_toml::<Map>(&tmp.path().join("missing.toml")).is_err());
+    }
 }

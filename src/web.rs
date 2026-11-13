@@ -106,7 +106,7 @@ pub fn generate_web(all_packages: &Vec<String>, config: &CliWebConfig) {
         generate_html_pkg(
             package,
             recipe,
-            &dependents.into_iter().collect(),
+            &dependents.into_iter().collect::<Vec<_>>(),
             &stage_files,
             &html_path,
             config,

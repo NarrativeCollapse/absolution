@@ -71,6 +71,12 @@ pub struct ExecutionManager {
     pub active_job_order: Vec<JobId>,
 }
 
+impl Default for ExecutionManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ExecutionManager {
     pub fn new() -> Self {
         Self {
@@ -91,7 +97,7 @@ impl ExecutionManager {
         }
 
         // Scan anything not failed to auto close
-        if self.active_job_order.len() > 0 {
+        if !self.active_job_order.is_empty() {
             for id in self.active_job_order.clone() {
                 if self
                     .jobs
@@ -146,7 +152,7 @@ impl ExecutionManager {
         job.pid = Some(handle.id());
         self.jobs.insert(job_id, job);
 
-        let _ = write!(pipe_writer, "{:?}\n", cmd);
+        let _ = writeln!(pipe_writer, "{:?}", cmd);
         thread::spawn(move || {
             let code = handle.wait().unwrap().code().unwrap_or(-1);
             status_tx

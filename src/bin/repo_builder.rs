@@ -39,7 +39,7 @@ impl CliConfig {
 fn main() -> Result<()> {
     init_ident();
     let conf = CliConfig::parse_args()?;
-    Ok(publish_packages(&conf)?)
+    publish_packages(&conf)
 }
 
 // TODO: Make this callable from repo bin
@@ -60,7 +60,7 @@ fn publish_packages(config: &CliConfig) -> Result<()> {
         })
         .collect::<Vec<_>>();
 
-    if target_packages.len() == 0 {
+    if target_packages.is_empty() {
         return Ok(());
     }
 
@@ -76,9 +76,11 @@ fn publish_packages(config: &CliConfig) -> Result<()> {
     // well.
     let (recipe_list, recipe_map) = staged_pkg::new_recursive_nonstop(target_packages, WALK_DEPTH);
 
-    if recipe_list.len() == 0 {
+    if recipe_list.is_empty() {
         // Fail-Safe
-        return Err(Error::Other(format!("Zero packages are passing the build")));
+        return Err(Error::Other(
+            "Zero packages are passing the build".to_string(),
+        ));
     }
 
     let mut appstream_sources: HashMap<String, PathBuf> = HashMap::new();
@@ -148,7 +150,7 @@ fn publish_packages(config: &CliConfig) -> Result<()> {
                 .arg("--print-report=full")
                 .arg(format!("--result-root={}", appstream_root.display()));
 
-            for (_recipe, source_path) in &appstream_sources {
+            for source_path in appstream_sources.values() {
                 compose_cmd.arg(source_path);
             }
 
@@ -165,7 +167,7 @@ fn publish_packages(config: &CliConfig) -> Result<()> {
                 )?;
             } else {
                 eprintln!("\x1b[1;91;49mrepo - appstreamcli failed:\x1b[0m {exit_status:?}");
-                for (_recipe, source_path) in &appstream_sources {
+                for source_path in appstream_sources.values() {
                     eprintln!("- {}", source_path.display());
                 }
                 eprintln!();
@@ -176,7 +178,7 @@ fn publish_packages(config: &CliConfig) -> Result<()> {
     // === 3. List outdated packages ===
     for (recipe, e) in recipe_map
         .into_iter()
-        .filter_map(|(k, v)| v.err().and_then(|e| Some((k, e))))
+        .filter_map(|(k, v)| v.err().map(|e| (k, e)))
     {
         eprintln!(
             "\x1b[0;91;49mrepo - marking {} as outdated:\x1b[0m {e}",
@@ -224,7 +226,7 @@ fn publish_packages(config: &CliConfig) -> Result<()> {
         for (k, v) in parsed.packages {
             packages.insert(k, v);
         }
-        if parsed.outdated_packages.len() > 0 {
+        if !parsed.outdated_packages.is_empty() {
             let built_packages: BTreeSet<String> = recipe_list
                 .iter()
                 .map(|p| p.name.name().to_string())
@@ -238,7 +240,7 @@ fn publish_packages(config: &CliConfig) -> Result<()> {
     }
 
     for entry in
-        std::fs::read_dir(&repo_path).map_err(|e| Error::from_io_error(e, "Listing repo"))?
+        std::fs::read_dir(repo_path).map_err(|e| Error::from_io_error(e, "Listing repo"))?
     {
         let entry = entry.map_err(|e| Error::from_io_error(e, "Reading repo entry"))?;
         let path = entry.path();
@@ -256,7 +258,7 @@ fn publish_packages(config: &CliConfig) -> Result<()> {
         let empty_ver = Value::String("".to_string());
         let version_str = parsed
             .get("blake3")
-            .unwrap_or_else(|| parsed.get("version").unwrap_or_else(|| &empty_ver))
+            .unwrap_or_else(|| parsed.get("version").unwrap_or(&empty_ver))
             .as_str()
             .unwrap_or("");
         let package_name = path.file_stem().unwrap().to_string_lossy().to_string();

@@ -87,25 +87,6 @@ pub fn from_path(dir: &Path, feature: Option<&str>) -> Result<Package, PackageEr
     Package::from_file(file)
 }
 
-pub fn new_recursive(
-    names: &[PackageName],
-    nonstop: bool,
-    recursion: usize,
-) -> Result<Vec<Package>, PackageError> {
-    if names.is_empty() {
-        return Ok(vec![]);
-    }
-    let (list, map) = new_recursive_nonstop(names, recursion);
-    if nonstop && !list.is_empty() {
-        Ok(list)
-    } else if !nonstop && map.len() == list.len() {
-        Ok(list)
-    } else {
-        let (_, res) = map.into_iter().find(|(_, v)| v.is_err()).unwrap();
-        Err(res.err().unwrap())
-    }
-}
-
 /// List ordered success packages and map of failed packages.
 /// A package can be both success and failed if dependencies aren't satistied.
 pub fn new_recursive_nonstop(

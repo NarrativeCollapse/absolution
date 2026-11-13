@@ -1,5 +1,7 @@
-// Scripts here is executed using "cookbook_redoxer env" where CC, RUSTFLAGS, etc. defined.
-// Look up redoxer env script if you want to see how they work.
+//! The bash fragments that surround every recipe's build script.
+//!
+//! They run under `cookbook_redoxer env`, which defines CC, RUSTFLAGS and the
+//! rest of the cross-compilation environment.
 
 pub(crate) static SHARED_PRESCRIPT: &str = r#"
 # Build dynamically
@@ -47,7 +49,7 @@ function DYNAMIC_INIT {
 
 COOKBOOK_AUTORECONF="autoreconf"
 autotools_recursive_regenerate() {
-    for f in $(find . -name configure.ac -o -name configure.in -type f | sort); do
+    for f in $(find . \( -name configure.ac -o -name configure.in \) -type f | sort); do
         echo "* autotools regen in '$(dirname $f)'..."
         ( cd "$(dirname "$f")" && "${COOKBOOK_AUTORECONF}" -fvi "$@" -I${COOKBOOK_LIBTOOL_DIR:-$COOKBOOK_HOST_SYSROOT}/share/aclocal )
     done
@@ -167,7 +169,7 @@ function cookbook_cargo {
         --path "${COOKBOOK_SOURCE}${COOKBOOK_CARGO_PATH:+/$COOKBOOK_CARGO_PATH}" \
         --root "${COOKBOOK_STAGE}/usr" \
         -j "${COOKBOOK_MAKE_JOBS}" ${install_flags} \
-        ${COOKBOOK_CARGO_FLAGS[@]} "$@"
+        "${COOKBOOK_CARGO_FLAGS[@]}" "$@"
 }
 
 # cargo template using cargo build (prefixed name)
@@ -180,7 +182,7 @@ function cookbook_cargo_build {
     mkdir -pv "${COOKBOOK_STAGE}/usr/bin"
     "${COOKBOOK_CARGO}" build \
         --manifest-path "${COOKBOOK_SOURCE}${COOKBOOK_CARGO_PATH:+/$COOKBOOK_CARGO_PATH}/Cargo.toml" \
-        ${bin_flags} ${build_flags} -j "${COOKBOOK_MAKE_JOBS}" ${COOKBOOK_CARGO_FLAGS[@]}
+        ${bin_flags} ${build_flags} -j "${COOKBOOK_MAKE_JOBS}" "${COOKBOOK_CARGO_FLAGS[@]}"
     cp -v \
         "target/${TARGET}/${build_type}/${bin_dir}/${bin_name}" \
         "${COOKBOOK_STAGE}/usr/bin/${bin_final_name}"
@@ -299,7 +301,7 @@ set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_PLATFORM_USES_PATH_WHEN_NO_SONAME 1)
-set(CMAKE_PREFIX_PATH, ${sysroot})
+set(CMAKE_PREFIX_PATH ${sysroot})
 set(CMAKE_SHARED_LIBRARY_SONAME_C_FLAG "-Wl,-soname,")
 set(CMAKE_SYSTEM_NAME ${system_name})
 set(CMAKE_SYSTEM_PROCESSOR ${arch})
@@ -456,8 +458,6 @@ fi
 
 strip_directory() {
   local target_dir="$1"
-  local strip_cmd="${STRIP}"
-  local strip_flags="${STRIP_ARGS:-}"
 
   find "$target_dir" -type f -print0 | while IFS= read -r -d '' file; do
     # check magic bytes for elf and ar before stripping
@@ -529,5 +529,9 @@ if [ -n "$ALL_DESCENDANTS" ]; then
     kill $ALL_DESCENDANTS;
 fi
 
-killall sccache
+# Ask the compiler cache to shut down cleanly rather than killing every
+# sccache process on the machine; it restarts on demand.
+if command -v sccache >/dev/null 2>&1; then
+    sccache --stop-server >/dev/null 2>&1 || true
+fi
 "#;

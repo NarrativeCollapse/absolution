@@ -9,7 +9,7 @@ use std::{fs, path::Path};
 pub fn generate_html_pkg(
     package: &Package,
     recipe: &CookRecipe,
-    dependents: &Vec<String>,
+    dependents: &[String],
     stage_files: &Option<String>,
     html_path: &Path,
     config: &crate::web::CliWebConfig,

@@ -116,7 +116,7 @@ pub fn render_build_log<'a>(
 }
 
 /// Join logs for logging
-pub fn join_logs(log: &Vec<String>, line: Option<Cow<'_, str>>) -> String {
+pub fn join_logs(log: &[String], line: Option<Cow<'_, str>>) -> String {
     let mut logs = log.join("\n");
     if let Some(line) = line {
         logs.push('\n');
@@ -125,7 +125,7 @@ pub fn join_logs(log: &Vec<String>, line: Option<Cow<'_, str>>) -> String {
     logs
 }
 
-fn handle_cr<'a>(buffer: &'a Cow<'_, str>) -> &'a str {
+fn handle_cr(buffer: &str) -> &str {
     let st = buffer.trim_end();
     st.rsplit('\r').next().unwrap_or(st)
 }
@@ -134,7 +134,7 @@ fn handle_cr<'a>(buffer: &'a Cow<'_, str>) -> &'a str {
 pub fn get_clicked_tab_index(
     area: Rect,
     mp: Position,
-    titles: &Vec<String>,
+    titles: &[String],
     divider_len: u16,
 ) -> Option<usize> {
     if !area.contains(mp) {
@@ -164,11 +164,11 @@ pub fn get_clicked_tab_index(
 
 /// Kill everything under given PID or this process PID.
 pub fn kill_everything(pid: Option<u32>) {
-    process::Command::new("bash")
+    // Best effort: if bash cannot be started there is nothing left to try.
+    let _ = process::Command::new("bash")
         .arg("-c")
         .arg(KILL_ALL_PID.replace("$PID", &pid.unwrap_or_else(process::id).to_string()))
         .stdout(process::Stdio::null())
         .stderr(process::Stdio::null())
-        .spawn()
-        .expect("unable to spawn kill");
+        .status();
 }

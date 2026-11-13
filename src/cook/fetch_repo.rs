@@ -1,150 +1,148 @@
+//! Access to the remote repository of pre-built packages.
+
 use std::{
     cell::RefCell,
     io::{PipeWriter, Write},
     path::{Path, PathBuf},
     rc::Rc,
-    time::Duration,
+    time::{Duration, SystemTime},
 };
 
-use crate::cook::fs;
 use pkg::{
     PackageName, RepoManager, Repository,
     callback::{Callback, PlainCallback, SilentCallback},
     net_backend::{CurlBackend, DownloadBackend},
 };
 
-// TODO: This is a workaround, but as long as whole
-// fetch operation is in single thread, this is ok
+use crate::{Error, Result, config::get_config, cook::fs};
+
+/// Where repository metadata, keys and downloads are kept.
+const REMOTES_DIR: &str = "build/remotes";
+
+/// How long a downloaded package index is trusted before refreshing it.
+const INDEX_MAX_AGE: Duration = Duration::from_secs(8 * 3600);
+
+// Fetching is single threaded and `RepoManager` is not `Send`, so the
+// connection is kept per thread.
 thread_local! {
-static BINARY_REPO: RefCell<Option<(RepoManager, Repository)>> = const { RefCell::new(None) };
+    static BINARY_REPO: RefCell<Option<(RepoManager, Repository)>> = const { RefCell::new(None) };
 }
 
-fn load_cached_repo(path: &Path) -> Option<Repository> {
-    let metadata = std::fs::metadata(path).ok()?;
+/// The cached package index of `remote`, read and written at the same path.
+fn index_cache_path(remote: &str) -> PathBuf {
+    Path::new(REMOTES_DIR).join(format!("repo_{remote}_{}.toml", redoxer::target()))
+}
 
-    if !crate::config::get_config().cook.offline {
-        let stale_time = std::time::SystemTime::now().checked_sub(Duration::from_secs(8 * 3600))?;
-        if metadata.modified().ok()? < stale_time {
-            // stale cache
-            let _ = std::fs::remove_file(path);
+/// Load the cached index, unless it is missing, unreadable or (when online)
+/// older than [`INDEX_MAX_AGE`].
+fn load_cached_index(path: &Path, offline: bool) -> Option<Repository> {
+    if !offline {
+        let age = SystemTime::now()
+            .duration_since(fs::modified(path).ok()?)
+            .unwrap_or_default();
+        if age > INDEX_MAX_AGE {
             return None;
         }
     }
-
-    let toml_str = std::fs::read_to_string(path).ok()?;
-    Repository::from_toml(&toml_str).ok()
+    Repository::from_toml(&std::fs::read_to_string(path).ok()?).ok()
 }
 
-fn init_binary_repo() -> (RepoManager, Repository) {
-    let callback = Rc::new(RefCell::new(SilentCallback::new()));
-    let download_backend = CurlBackend::new().expect("Curl not found");
-    let mut repo = RepoManager::new(callback, Box::new(download_backend));
-    let target = redoxer::target();
+fn download_index(repo: &RepoManager, cache_path: &Path) -> Result<Repository> {
+    let (toml, _) = repo.get_package_toml(&PackageName::new("repo")?)?;
+    let index = Repository::from_toml(&toml)?;
+    fs::serialize_and_write(cache_path, &index)?;
+    Ok(index)
+}
+
+fn init_binary_repo() -> Result<(RepoManager, Repository)> {
+    let offline = get_config().cook.offline;
+    let backend = CurlBackend::new().map_err(|e| {
+        Error::Other(format!(
+            "Unable to set up downloads, is curl installed? {e}"
+        ))
+    })?;
+    let mut repo = RepoManager::new(
+        Rc::new(RefCell::new(SilentCallback::new())),
+        Box::new(backend),
+    );
     let remote_source = crate::config::translate_mirror(crate::REMOTE_PKG_SOURCE);
-    repo.add_remote(&remote_source, target)
-        .expect("Unable to add remote");
+    repo.add_remote(&remote_source, redoxer::target())?;
+    repo.set_download_path(PathBuf::from(REMOTES_DIR));
+    repo.sync_keys()?;
 
-    let repo_path = PathBuf::from("build/remotes");
-    repo.set_download_path(repo_path.clone());
-    repo.sync_keys().expect("Unable to sync keys");
+    let cache_path = index_cache_path(&repo.remotes[0]);
+    let index = match load_cached_index(&cache_path, offline) {
+        Some(index) => index,
+        None if offline => {
+            eprintln!("No cached package index, all recipes will build from source");
+            Repository::default()
+        }
+        None => download_index(&repo, &cache_path).unwrap_or_else(|e| {
+            eprintln!("Unable to load the package index, all recipes will build from source: {e}");
+            Repository::default()
+        }),
+    };
 
-    let repo_toml =
-        load_cached_repo(&repo_path.join(format!("repo_{}_{target}.toml", repo.remotes[0])))
-            .unwrap_or_else(|| {
-                download_repo(&repo, repo_path)
-                .map_err(|e| {
-                    eprintln!(
-                        "Unable to load server repo.toml, all recipes will build from source: {e}"
-                    );
-                    e
-                })
-                .unwrap_or_default()
-            });
-    // reset here to not clobber pty
+    // Downloads report progress, unlike the setup above.
     repo.callback = Rc::new(RefCell::new(PlainCallback::new()));
-    (repo, repo_toml)
+    Ok((repo, index))
 }
 
-fn download_repo(repo: &RepoManager, repo_path: PathBuf) -> crate::Result<Repository> {
-    let (toml_str, _) = repo.get_package_toml(&PackageName::new("repo").unwrap())?;
-    let repo = Repository::from_toml(&toml_str)?;
-    let target = redoxer::target();
-    fs::serialize_and_write(&repo_path.join(format!("{target}_repo.toml")), &repo)?;
-    Ok(repo)
-}
-
-pub fn get_binary_repo() -> (RepoManager, Repository) {
+fn with_binary_repo<T>(f: impl FnOnce(&RepoManager, &Repository) -> T) -> Result<T> {
     BINARY_REPO.with(|cell| {
-        let mut opt = cell.borrow_mut();
-        if opt.is_none() {
-            *opt = Some(init_binary_repo());
+        let mut slot = cell.borrow_mut();
+        if slot.is_none() {
+            *slot = Some(init_binary_repo()?);
         }
-        let (repo, repo_toml) = opt.as_ref().unwrap();
-        ((*repo).clone(), repo_toml.clone())
-    })
-}
-pub fn get_binary_pubkey() -> PathBuf {
-    BINARY_REPO.with(|cell| {
-        let mut opt = cell.borrow_mut();
-        if opt.is_none() {
-            *opt = Some(init_binary_repo());
-        }
-        let (repo, _) = opt.as_ref().unwrap();
-        let repo_path = PathBuf::from("build/remotes");
-        repo_path.join(format!("pub_key_{}.toml", repo.remotes[0]))
+        let (repo, index) = slot.as_ref().expect("initialized above");
+        Ok(f(repo, index))
     })
 }
 
+/// The remote repository connection and its package index.
+pub fn get_binary_repo() -> Result<(RepoManager, Repository)> {
+    with_binary_repo(|repo, index| (repo.clone(), index.clone()))
+}
+
+/// Whether the remote repository has a package called `name`.
+pub fn has_binary_package(name: &str) -> Result<bool> {
+    with_binary_repo(|_, index| index.packages.contains_key(name))
+}
+
+/// The file holding the public key remote packages are signed with.
+pub fn get_binary_pubkey() -> Result<PathBuf> {
+    with_binary_repo(|repo, _| {
+        Path::new(REMOTES_DIR).join(format!("pub_key_{}.toml", repo.remotes[0]))
+    })
+}
+
+/// Download progress written to a recipe's log instead of the terminal.
 pub struct PlainPtyCallback {
     size: u64,
     unknown_size: bool,
     pos: u64,
     fetch_processed: usize,
     fetch_total: usize,
-    interactive: bool,
     download_file: Option<String>,
-    pty: PipeWriter,
+    log: PipeWriter,
 }
 
 impl PlainPtyCallback {
-    pub fn new(pty: PipeWriter) -> Self {
+    pub fn new(log: PipeWriter) -> Self {
         Self {
             size: 0,
             unknown_size: false,
             pos: 0,
             fetch_processed: 0,
             fetch_total: 0,
-            interactive: false,
             download_file: None,
-            pty,
+            log,
         }
-    }
-
-    /// Set if user require to agree on terminal
-    pub fn set_interactive(&mut self, enabled: bool) {
-        self.interactive = enabled;
-    }
-
-    fn flush(&self) {
-        let _ = std::io::stderr().flush();
-    }
-
-    pub fn format_size(bytes: u64) -> String {
-        if bytes == 0 {
-            return "0 B".to_string();
-        }
-        const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
-        let i = (bytes as f64).log(1024.0).floor() as usize;
-        let size = bytes as f64 / 1024.0_f64.powi(i as i32);
-        format!("{:.2} {}", size, UNITS[i])
-    }
-
-    fn downloading_str(&self) -> &'static str {
-        "Downloading"
     }
 }
 
 const RESET_LINE: &str = "\r\x1b[2K";
+const MEBIBYTE: f64 = 1_048_576.0;
 
 impl Callback for PlainPtyCallback {
     fn fetch_start(&mut self, initial_count: usize) {
@@ -154,29 +152,27 @@ impl Callback for PlainPtyCallback {
     }
 
     fn fetch_package_name(&mut self, pkg_name: &PackageName) {
-        // resuming after fetch_package_increment
-        let _ = write!(&self.pty, " {}", pkg_name.as_str());
-        self.flush();
+        // Continues the line started by fetch_package_increment.
+        let _ = write!(&self.log, " {}", pkg_name.as_str());
     }
 
     fn fetch_package_increment(&mut self, added_processed: usize, added_count: usize) {
         self.fetch_processed += added_processed;
         self.fetch_total += added_count;
-
         let _ = write!(
-            &self.pty,
+            &self.log,
             "{RESET_LINE}Fetching: [{}/{}]",
             self.fetch_processed, self.fetch_total
         );
-        self.flush();
     }
 
     fn fetch_end(&mut self) {
-        if self.fetch_processed == self.fetch_total {
-            let _ = writeln!(&self.pty, "{RESET_LINE}Fetch complete.");
+        let outcome = if self.fetch_processed == self.fetch_total {
+            "complete"
         } else {
-            let _ = writeln!(&self.pty, "{RESET_LINE}Fetch incomplete.");
-        }
+            "incomplete"
+        };
+        let _ = writeln!(&self.log, "{RESET_LINE}Fetch {outcome}.");
     }
 
     fn download_start(&mut self, length: u64, file: &str) {
@@ -184,9 +180,8 @@ impl Callback for PlainPtyCallback {
         self.unknown_size = length == 0;
         self.pos = 0;
         if !self.unknown_size {
-            let _ = write!(&self.pty, "{RESET_LINE}{} {file}", self.downloading_str());
+            let _ = write!(&self.log, "{RESET_LINE}Downloading {file}");
             self.download_file = Some(file.to_string());
-            self.flush();
         }
     }
 
@@ -194,30 +189,48 @@ impl Callback for PlainPtyCallback {
         self.pos += downloaded;
         if self.unknown_size {
             self.size += downloaded;
-        }
-        if self.unknown_size {
             return;
         }
-
-        // keep using MB for consistency
-        let pos_mb = self.pos as f64 / 1_048_576.0;
-        let size_mb = self.size as f64 / 1_048_576.0;
-        let file_name = self.download_file.as_deref().unwrap_or("");
         let _ = write!(
-            &self.pty,
-            "{RESET_LINE}{} {} [{:.2} MB / {:.2} MB]",
-            self.downloading_str(),
-            file_name,
-            pos_mb,
-            size_mb
+            &self.log,
+            "{RESET_LINE}Downloading {} [{:.2} MiB / {:.2} MiB]",
+            self.download_file.as_deref().unwrap_or(""),
+            self.pos as f64 / MEBIBYTE,
+            self.size as f64 / MEBIBYTE,
         );
-        self.flush();
     }
 
     fn download_end(&mut self) {
         if !self.unknown_size {
-            let _ = writeln!(&self.pty);
+            let _ = writeln!(&self.log);
             self.download_file = None;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stale_or_missing_index_is_not_loaded_online() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("repo.toml");
+        assert!(load_cached_index(&path, false).is_none());
+        assert!(load_cached_index(&path, true).is_none());
+
+        fs::serialize_and_write(&path, &Repository::default()).unwrap();
+        assert!(load_cached_index(&path, false).is_some());
+
+        let old = SystemTime::now() - INDEX_MAX_AGE - Duration::from_secs(60);
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
+        assert!(load_cached_index(&path, false).is_none());
+        // Offline, an old index is better than none.
+        assert!(load_cached_index(&path, true).is_some());
     }
 }

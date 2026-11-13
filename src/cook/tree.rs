@@ -122,7 +122,13 @@ pub fn display_tree_entry(
     display_opt: DisplayOptions,
 ) -> Result<TreeData> {
     let mut data = TreeData::new();
-    let num_roots = package_roots.len() - 1;
+    let last_root = package_roots.len().saturating_sub(1);
+    let op: fn(TreeItem) -> Result<bool> = match display_opt {
+        DisplayOptions::Name => display_name_fn,
+        DisplayOptions::Path => display_path_fn,
+        DisplayOptions::Csv => display_csv_fn,
+        DisplayOptions::Tree => display_tree_fn,
+    };
     let dependents = if matches!(display_opt, DisplayOptions::Csv | DisplayOptions::Tree) {
         Some(build_dependents(recipe_map, tree_opt))
     } else {
@@ -142,15 +148,10 @@ pub fn display_tree_entry(
             recipe_map,
             dependents.as_ref(),
             "",
-            i == num_roots,
+            i == last_root,
             tree_opt,
             &mut data,
-            match display_opt {
-                DisplayOptions::Name => display_name_fn,
-                DisplayOptions::Path => display_path_fn,
-                DisplayOptions::Csv => display_csv_fn,
-                DisplayOptions::Tree => display_tree_fn,
-            },
+            &op,
         )?;
     }
     Ok(data)
@@ -193,6 +194,9 @@ pub fn build_dependents(
 }
 
 /// Does tree recursion to `op` call.
+// The arguments mirror the state threaded through the recursion.
+#[allow(clippy::too_many_arguments)]
+// Does tree recursion to `op` call.
 /// Tree recursion is different than recursion in [`CookRecipe`],
 /// this version does call `op` from root then to their deps.
 /// dependents can be precalculated with [`build_dependents`].
@@ -204,7 +208,7 @@ pub fn walk_tree_entry(
     is_last: bool,
     tree_opt: TreeOptions,
     data: &mut TreeData,
-    op: fn(TreeItem) -> Result<bool>,
+    op: &dyn Fn(TreeItem) -> Result<bool>,
 ) -> Result<()> {
     // To avoid confusion
     if package_name.is_host() {
@@ -301,7 +305,7 @@ pub fn walk_tree_entry(
     for (i, dep_name) in dependencies.iter().enumerate() {
         data.dependents
             .entry((*dep_name).clone())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(package_name.clone());
         walk_tree_entry(
             dep_name,

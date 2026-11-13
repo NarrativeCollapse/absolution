@@ -52,10 +52,10 @@ fn main() -> Result<()> {
     let (input_tx, input_rx) = mpsc::channel::<Event>();
     let _input_handle = thread::spawn(move || {
         for evt in events {
-            if let Ok(evt) = evt {
-                if input_tx.send(evt).is_err() {
-                    return;
-                }
+            if let Ok(evt) = evt
+                && input_tx.send(evt).is_err()
+            {
+                return;
             }
         }
     });
@@ -124,8 +124,8 @@ fn render_left_recipes(
         ])
         .split(main_chunks[0]);
 
-    let search_title = if app.pinned_recipes.len() == 0 {
-        format!(" Search ")
+    let search_title = if app.pinned_recipes.is_empty() {
+        " Search ".to_string()
     } else {
         format!(" Search [Selected {}] ", app.pinned_recipes.len())
     };
@@ -201,7 +201,7 @@ fn render_right_tabs(
     let mut right_tab_titles = vec![" [F6] Build ".to_string()];
     let mut fbtn = 6;
     for job in &app.exec.active_job_order {
-        let Some(job) = app.exec.jobs.get(&job) else {
+        let Some(job) = app.exec.jobs.get(job) else {
             continue;
         };
         let fstr = if fbtn > 12 {
@@ -540,13 +540,10 @@ fn handle_input<B: ratatui::backend::Backend>(
                                 let now = Instant::now();
                                 if let (Some(last_time), Some(last_idx)) =
                                     (app.last_click_time, app.last_click_idx)
+                                    && last_idx == target_idx
+                                    && now.duration_since(last_time) < Duration::from_millis(300)
                                 {
-                                    if last_idx == target_idx
-                                        && now.duration_since(last_time)
-                                            < Duration::from_millis(300)
-                                    {
-                                        app.toggle_pinned_highlighted();
-                                    }
+                                    app.toggle_pinned_highlighted();
                                 }
                                 app.last_click_time = Some(now);
                                 app.last_click_idx = Some(target_idx);
@@ -555,7 +552,6 @@ fn handle_input<B: ratatui::backend::Backend>(
                     } else if main_chunks[1].contains(mp) {
                         app.focus = Focus::MainPanel;
 
-                        if app.current_job_id().is_none() {}
                         let mut clicked_command = None;
                         for btn in &app.buttons {
                             if btn.area.contains(mp) {

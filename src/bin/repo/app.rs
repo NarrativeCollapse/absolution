@@ -106,13 +106,12 @@ pub enum JobType {
     Cook,
 }
 
-impl ToString for JobType {
-    fn to_string(&self) -> String {
-        match self {
+impl std::fmt::Display for JobType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
             JobType::Fetch => "Fetch",
             JobType::Cook => "Cook",
-        }
-        .to_string()
+        })
     }
 }
 
@@ -593,7 +592,7 @@ pub fn run_tui_cook(config: CliConfig, recipes: Vec<CookRecipe>) -> Result<TuiAp
             let log_title = if let Some(active_name) = active_name {
                 format!(
                     " {} Log: {} ",
-                    app.log_view_job.to_string(),
+                    app.log_view_job,
                     if app.is_inspecting {
                         staged_pkg::find(active_name.as_str())
                             .and_then(|s| s.to_str())
@@ -603,7 +602,7 @@ pub fn run_tui_cook(config: CliConfig, recipes: Vec<CookRecipe>) -> Result<TuiAp
                     }
                 )
             } else {
-                format!(" {} Log ", app.log_view_job.to_string())
+                format!(" {} Log ", app.log_view_job)
             };
 
             let mut enable_auto_scroll = app.auto_scroll;
@@ -920,8 +919,9 @@ fn handle_prompt_input<'a>(
     app: &'a mut TuiApp,
 ) -> Option<(&'a mut TuiApp, PromptOption)> {
     if let Some(prompt) = &mut app.prompt {
-        match event {
-            Event::Key(key) => match key {
+        // Mouse events are ignored while the prompt is shown.
+        if let Event::Key(key) = event {
+            match key {
                 Key::Char('q') | Key::Ctrl('c') | Key::Esc => {
                     // Treat as "Exit"
                     return Some((app, PromptOption::Exit));
@@ -932,12 +932,12 @@ fn handle_prompt_input<'a>(
                     app.is_inspecting = true;
                 }
                 Key::Char('\n') => {
-                    let prompt = app.prompt.take().unwrap();
-                    return Some((app, prompt.selected));
+                    let selected = prompt.selected;
+                    app.prompt = None;
+                    return Some((app, selected));
                 }
                 _ => {}
-            },
-            _ => {} // Ignore mouse events
+            }
         }
     }
     None

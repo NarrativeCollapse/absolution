@@ -24,13 +24,16 @@ pub(crate) use log_to_pty;
 
 pub type PtyOut<'a> = Option<(&'a mut UnixSlavePty, &'a mut PipeWriter)>;
 
+/// The reading end of a pty.
+pub type PtyReader = Box<dyn Read + Send>;
+/// The writing end of a pty, for feeding input to the process attached to it.
+pub type PtyWriter = Box<dyn Write + Send>;
+/// What a process writes to: its pty and the pipe collecting cookbook logs.
+pub type PtyPipes = (UnixSlavePty, PipeWriter);
+
 /// Setup pty without stdin.
 /// Returns (pty stdout, log out, pty+log writer)
-pub fn setup_pty() -> (
-    Box<dyn Read + Send>,
-    PipeReader,
-    (UnixSlavePty, std::io::PipeWriter),
-) {
+pub fn setup_pty() -> (PtyReader, PipeReader, PtyPipes) {
     let pty_system = UnixPtySystem::default();
     let pair = pty_system
         .openpty(PtySize {
@@ -52,12 +55,7 @@ pub fn setup_pty() -> (
 
 /// Setup pty with stdin.
 /// Returns (pty stdout, log out, pty stdin, pty+log writer)
-pub fn setup_pty_with_stdin() -> (
-    Box<dyn Read + Send>,
-    PipeReader,
-    Box<dyn Write + Send>,
-    (UnixSlavePty, PipeWriter),
-) {
+pub fn setup_pty_with_stdin() -> (PtyReader, PipeReader, PtyWriter, PtyPipes) {
     let pty_system = UnixPtySystem::default();
     let pair = pty_system
         .openpty(PtySize {

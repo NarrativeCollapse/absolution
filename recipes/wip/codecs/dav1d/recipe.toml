@@ -2,7 +2,6 @@
 # build instructions: https://code.videolan.org/videolan/dav1d#compile
 [source]
 tar = "https://downloads.videolan.org/videolan/dav1d/1.5.3/dav1d-1.5.3.tar.xz"
-shallow_clone = true
 [build]
 template = "meson"
 mesonflags = [

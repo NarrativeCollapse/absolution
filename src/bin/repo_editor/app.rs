@@ -76,6 +76,12 @@ pub struct App {
     pub exec: ExecutionManager,
 }
 
+impl Default for App {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl App {
     pub fn new() -> Self {
         let mut app = Self {
@@ -185,11 +191,11 @@ impl App {
             self.list_state.select(None);
         } else if self.list_state.selected().is_none() {
             self.list_state.select(Some(0));
-        } else if let Some(idx) = self.list_state.selected() {
-            if idx >= self.filtered_recipes.len() {
-                self.list_state
-                    .select(Some(self.filtered_recipes.len() - 1));
-            }
+        } else if let Some(idx) = self.list_state.selected()
+            && idx >= self.filtered_recipes.len()
+        {
+            self.list_state
+                .select(Some(self.filtered_recipes.len() - 1));
         }
 
         self.right_tab_active = RightPanelTab::MainActions;
@@ -235,7 +241,7 @@ impl App {
         }
     }
 
-    pub fn box_style<'a, 'b>(&'b self, title: &'a str, hint: &'a str, focus: Focus) -> Block<'a> {
+    pub fn box_style<'a>(&self, title: &'a str, hint: &'a str, focus: Focus) -> Block<'a> {
         let style = if self.focus == focus {
             Style::default().fg(Color::Cyan)
         } else {
@@ -270,20 +276,16 @@ impl App {
         let RightPanelTab::Terminal(i) = self.right_tab_active else {
             return None;
         };
-        self.exec.active_job_order.get(i).map(|s| *s)
+        self.exec.active_job_order.get(i).copied()
     }
 
     pub fn current_job(&self) -> Option<&PackageJob> {
-        let Some(i) = self.current_job_id() else {
-            return None;
-        };
+        let i = self.current_job_id()?;
         self.exec.jobs.get(&i)
     }
 
     pub fn current_job_mut(&mut self) -> Option<&mut PackageJob> {
-        let Some(i) = self.current_job_id() else {
-            return None;
-        };
+        let i = self.current_job_id()?;
         self.exec.jobs.get_mut(&i)
     }
 }

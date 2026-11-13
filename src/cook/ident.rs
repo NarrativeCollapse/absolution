@@ -11,10 +11,10 @@ pub struct IdentifierConfig {
 
 impl IdentifierConfig {
     fn new() -> Self {
-        let (commit, _) = crate::cook::fs::get_git_head_rev(
-            &std::env::current_dir().expect("unable to get $PWD"),
-        )
-        .unwrap_or(("".into(), false));
+        // Empty when the cookbook is not run from a git checkout.
+        let commit = crate::cook::git::head(std::path::Path::new("."))
+            .map(|head| head.rev)
+            .unwrap_or_default();
         // better than importing heavy deps like chrono
         let time = String::from_utf8_lossy(
             Command::new("date")

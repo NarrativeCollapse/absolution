@@ -11,7 +11,7 @@ use pkgar_keys::PublicKeyFile;
 use crate::{
     Error, Result,
     config::CookConfig,
-    cook::{cook_build::BuildResult, fetch, fs::*, pty::PtyOut},
+    cook::{PUBLIC_KEY_PATH, SECRET_KEY_PATH, cook_build::BuildResult, fetch, fs::*, pty::PtyOut},
     log_to_pty,
     recipe::{BuildKind, CookRecipe, OptionalPackageRecipe},
     wrap_io_err,
@@ -39,11 +39,12 @@ pub fn package(
         return Ok(());
     }
 
-    let secret_path = "build/id_ed25519.toml";
-    let public_path = "build/id_ed25519.pub.toml";
-    if !Path::new(secret_path).is_file() || !Path::new(public_path).is_file() {
-        if !Path::new("build").is_dir() {
-            create_dir(Path::new("build"))?;
+    let secret_path = Path::new(SECRET_KEY_PATH);
+    let public_path = Path::new(PUBLIC_KEY_PATH);
+    if !secret_path.is_file() || !public_path.is_file() {
+        // First build in this tree: create the key packages are signed with.
+        if let Some(key_dir) = secret_path.parent() {
+            create_dir(key_dir)?;
         }
         let (public_key, secret_key) = pkgar_keys::SecretKeyFile::new();
         public_key.save(public_path)?;
@@ -69,8 +70,8 @@ pub fn package(
             }
             pkgar::create_with_flags(
                 secret_path,
-                package_file.to_str().unwrap(),
-                stage_dir.to_str().unwrap(),
+                &package_file,
+                &stage_dir,
                 HeaderFlags::latest(
                     pkgar_core::Architecture::Independent,
                     match cook_config.compressed {
@@ -109,7 +110,7 @@ pub fn package(
             package_toml(
                 package_meta,
                 recipe,
-                Some((Path::new(public_path), &package_file)),
+                Some((public_path, &package_file)),
                 package,
                 package_deps,
                 &deps,
@@ -146,7 +147,7 @@ pub fn package_toml(
             pkgar_core::Packaging::LZMA2 => {
                 let mut size = header
                     .total_size()
-                    .map_err(|e| Error::Pkgar(pkgar::Error::Core(e)))?
+                    .map_err(|e| Error::from(pkgar::Error::Core(e)))?
                     as u64;
                 let entries = package.read_entries()?;
                 for entry in entries {
@@ -176,8 +177,7 @@ pub fn package_toml(
         name: PackageName::new(get_package_name(
             recipe.name.without_prefix(),
             package_suffix,
-        ))
-        .unwrap(),
+        ))?,
         version: recipe.guess_version().unwrap_or("TODO".into()),
         target: recipe.target.to_string(),
         blake3: hash,
@@ -252,7 +252,7 @@ pub fn package_handle_push(
     sysroot_dir: &Path,
 ) -> crate::Result<bool> {
     let archive_toml = archive_path.with_extension("toml");
-    let pkey_path = "build/id_ed25519.pub.toml";
+    let pkey_path = PUBLIC_KEY_PATH;
     let pkg_toml = Package::from_file(&archive_toml)?;
     // "local" is what remote name from installer is hardcoded into
     let remote_name = "local".to_string();
@@ -283,9 +283,8 @@ pub fn package_handle_push(
                 "var/lib/packages/{}.pkgar_head",
                 pkg_toml.name.as_str()
             ));
-            let head_parent = head_path.parent();
-            if head_parent.is_some_and(|s| !s.is_dir()) {
-                create_dir(head_parent.unwrap())?;
+            if let Some(head_parent) = head_path.parent() {
+                create_dir(head_parent)?;
             }
             package.split(&head_path, None::<&Path>)?;
         }
