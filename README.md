@@ -39,11 +39,22 @@ CONFIG_NAME?=minimal
 ARCH?=x86_64
 ```
 
+## Design
+
+Absolution is replacing the components it started from with its own, from
+the top of the stack down. [docs/DESIGN.md](docs/DESIGN.md) has the
+principles and the order. Components written for Absolution live in
+`components/`:
+
+- [absinit](docs/absinit.md), the service manager.
+
 ## Layout
 
 | Path | Purpose |
 |------|---------|
 | `src/` | The cookbook: the Rust tool (`repo`) that fetches, builds and packages recipes |
+| `components/` | Components written for Absolution, each a Rust crate with its own tests |
+| `docs/` | Design and component documentation |
 | `recipes/` | One directory per package, each with a `recipe.toml` |
 | `recipes/wip/` | Recipes that are incomplete or untested |
 | `config/` | Image definitions |

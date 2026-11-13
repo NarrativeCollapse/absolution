@@ -324,3 +324,22 @@ fn installed_system_identifies_as_absolution() {
     );
     assert!(!base.to_lowercase().contains("redox-os.org"));
 }
+
+#[test]
+fn path_sources_exist() {
+    use cookbook::recipe::SourceRecipe;
+    let missing: Vec<String> = recipe_files()
+        .into_iter()
+        .filter_map(|(name, path)| match Recipe::load(&path).ok()?.source {
+            // Path sources are relative to the root of the tree.
+            Some(SourceRecipe::Path { path: source }) if !tree_root().join(&source).is_dir() => {
+                Some(format!("{name}: {source}"))
+            }
+            _ => None,
+        })
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "path sources that do not exist: {missing:?}"
+    );
+}

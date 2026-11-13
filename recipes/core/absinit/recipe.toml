@@ -1,0 +1,9 @@
+# Built from this repository; see docs/absinit.md.
+[package]
+description = "Absolution's service manager, not yet used as the system init"
+
+[source]
+path = "components/absinit"
+
+[build]
+template = "cargo"

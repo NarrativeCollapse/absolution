@@ -51,6 +51,35 @@ pub fn create_target_dir(recipe_dir: &Path, target: &str) -> Result<PathBuf> {
     Ok(target_dir)
 }
 
+/// Top-level directories of a local source tree that are not source: build
+/// output and version control.
+pub const NOT_SOURCE: [&str; 2] = ["target", ".git"];
+
+/// Copy a local source tree into `dst`, leaving out [`NOT_SOURCE`].
+pub fn copy_source_tree(src: &Path, dst: &Path) -> io::Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        if NOT_SOURCE.iter().any(|name| entry.file_name() == *name) {
+            continue;
+        }
+        let target = dst.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir_all(&entry.path(), &target)?;
+        } else {
+            fs::copy(entry.path(), target)?;
+        }
+    }
+    Ok(())
+}
+
+/// Like [`modified_dir`] for a local source tree, leaving out [`NOT_SOURCE`].
+pub fn modified_source_tree(dir: &Path) -> Result<SystemTime> {
+    modified_dir_filtered(dir, |entry| {
+        entry.depth() != 1 || !NOT_SOURCE.iter().any(|name| entry.file_name() == *name)
+    })
+}
+
 /// Recursively copy the contents of `src` into `dst`.
 pub fn copy_dir_all(src: &Path, dst: &Path) -> io::Result<()> {
     fs::create_dir_all(dst)?;
@@ -383,6 +412,35 @@ mod tests {
 
         assert_eq!(modified_dir(tmp.path()).unwrap(), future);
         assert!(modified_dir_ignore_git(tmp.path()).unwrap() < future);
+    }
+
+    #[test]
+    fn source_trees_leave_out_build_output() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("component");
+        write(&src.join("src/main.rs"), "fn main() {}");
+        write(&src.join("src/target/kept.rs"), "");
+        write(&src.join("target/debug/huge"), "build output");
+        write(&src.join(".git/HEAD"), "ref");
+
+        let dst = tmp.path().join("source");
+        copy_source_tree(&src, &dst).unwrap();
+        assert!(dst.join("src/main.rs").is_file());
+        // Only the top-level build directory is left out.
+        assert!(dst.join("src/target/kept.rs").is_file());
+        assert!(!dst.join("target").exists());
+        assert!(!dst.join(".git").exists());
+
+        // Building the component must not make its source look newer.
+        let before = modified_source_tree(&src).unwrap();
+        let future = SystemTime::now() + std::time::Duration::from_secs(3600);
+        fs::File::options()
+            .write(true)
+            .open(src.join("target/debug/huge"))
+            .unwrap()
+            .set_modified(future)
+            .unwrap();
+        assert_eq!(modified_source_tree(&src).unwrap(), before);
     }
 
     #[test]

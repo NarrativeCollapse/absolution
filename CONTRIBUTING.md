@@ -32,6 +32,15 @@ cargo test
 - Absolution has no graphical stack. Recipes that need a display server, a GUI toolkit or a GPU library are out of scope.
 - Keep patches minimal and prefer sending them upstream.
 
+## Components
+
+New components go in `components/<name>/` as a standalone crate with its own
+`Cargo.lock`, packaged by a recipe whose source is `path =
+"components/<name>"`. Follow the principles in `docs/DESIGN.md`: keep
+decisions in pure, unit-tested code and system calls in a thin layer, use
+only POSIX interfaces, and add the crate to the `components` job in
+`.github/workflows/ci.yml`.
+
 ## Cookbook code
 
 - Return errors; do not `unwrap` or `expect` on anything that can fail at run time. Add path or command context to I/O errors with `wrap_io_err!`.

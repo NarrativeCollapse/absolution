@@ -265,7 +265,7 @@ fn fetch_at_depth(
 }
 
 fn fetch_path(path: &Path, source_dir: PathBuf, logger: &PtyOut) -> Result<FetchResult> {
-    let cached = source_dir.is_dir() && modified_dir(path)? <= modified_dir(&source_dir)?;
+    let cached = source_dir.is_dir() && modified_source_tree(path)? <= modified_dir(&source_dir)?;
     if !cached {
         log_to_pty!(
             logger,
@@ -273,7 +273,7 @@ fn fetch_path(path: &Path, source_dir: PathBuf, logger: &PtyOut) -> Result<Fetch
             path.display(),
             source_dir.display()
         );
-        copy_dir_all(path, &source_dir).map_err(wrap_io_err!(
+        copy_source_tree(path, &source_dir).map_err(wrap_io_err!(
             path,
             source_dir,
             "Copying source"
