@@ -1,62 +1,105 @@
-<p align="center">
-<img alt="Redox" width="346" src="https://gitlab.redox-os.org/redox-os/assets/raw/master/logos/redox/logo.png">
-</p>
+# Absolution
 
-This repository is the **Build System** for Redox OS.
+Absolution is a command-line operating system built on the [Redox OS](https://www.redox-os.org) microkernel and userspace. It has no display server, window manager or graphical applications: it boots to a text console and is driven from the shell.
 
-Redox is under active development by a vibrant community, you can see the key links below:
+This repository is the build system. It fetches the sources of each component, cross-compiles them, packages them and assembles a bootable disk image.
 
-- [The **main website** for Redox OS](https://www.redox-os.org).
-- [The Redox Book](https://doc.redox-os.org/book/) and [Build Instructions](https://doc.redox-os.org/book/podman-build.html).
-- [Redox Chat and Support](https://matrix.to/#/#redox-join:matrix.org).
-- [Patreon](https://www.patreon.com/redox_os), [Donate](https://redox-os.org/donate/) and [Merch](https://redox-os.creator-spring.com/).
-- Scroll down for a list of key Redox components and their repositories.
+Absolution is an independent derivative of Redox OS and is not affiliated with or endorsed by the Redox OS nonprofit. "Redox OS" is their trademark.
 
-[Redox](https://www.redox-os.org) is an open-source operating system written in Rust, a language with focus on safety, efficiency and high performance. Redox uses a microkernel architecture, and aims to be reliable, secure, usable, correct, and free. Redox is inspired by previous operating systems, such as seL4, MINIX, Plan 9, Linux and BSD.
+## What is in an image
 
-Redox _is not_ just a kernel, it's a **full-featured operating system**, providing components (file system, display server, core utilities, etc.) that together make up a functional and convenient operating system. Redox uses the COSMIC desktop apps, and provides source code compatibility with many Rust, Linux and BSD programs.
+| Image | Contents |
+|-------|----------|
+| `minimal` | Kernel, drivers, core utilities, the Ion shell, a text editor and the package manager |
+| `server` (default) | `minimal` plus bash, curl, git, findutils, diffutils and a process monitor |
+| `dev` | `server` plus compilers and development libraries for building software on the system itself |
 
-[![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+Image definitions live in `config/`. Each one lists packages and may include another.
 
-## More Links
+## Building
 
-- [Book](https://doc.redox-os.org/book/)
-- [Contribute](CONTRIBUTING.md)
-- [Hardware Compatibility](https://doc.redox-os.org/book/hardware-support.html)
-- Run Redox in a [Virtual Machine](https://doc.redox-os.org/book/running-vm.html) or on [Real Hardware](https://doc.redox-os.org/book/real-hardware.html)
-- [Trying Out Redox](https://doc.redox-os.org/book/trying-out-redox.html)
-- [Building Redox](https://doc.redox-os.org/book/podman-build.html)
-- [Build System Documentation](https://doc.redox-os.org/book/build-system-reference.html)
-- [Developer FAQ](https://doc.redox-os.org/book/developer-faq.html)
-- [Chat/Discussions/Help](https://doc.redox-os.org/book/chat.html)
+The build runs inside a Podman container by default, so the host needs only `git`, `make`, `podman` and FUSE:
 
-## Ecosystem
+```bash
+./podman_bootstrap.sh
+```
 
-Some of the key repositories on the Redox GitLab:
+```bash
+make all
+```
 
-| Essential Repositories                                                               | Maintainer
-|-------------------------------------------------------------------------------------------------------------|---------------------------
-| [Kernel](https://gitlab.redox-os.org/redox-os/kernel)                                                       | **@jackpot51**
-| [Base (essential system components and drivers)](https://gitlab.redox-os.org/redox-os/base)                             | **@jackpot51**
-| [RedoxFS (default filesystem)](https://gitlab.redox-os.org/redox-os/redoxfs)                                | **@jackpot51**
-| [relibc (C POSIX library written in Rust)](https://gitlab.redox-os.org/redox-os/relibc)                     | **@jackpot51**
-| [Ion (defauilt shell)](https://gitlab.redox-os.org/redox-os/ion)                                            | **@jackpot51**
-| [Termion (terminal library)](https://gitlab.redox-os.org/redox-os/termion)                                  | **@jackpot51**
-| [pkgutils (current package manager)](https://gitlab.redox-os.org/redox-os/pkgutils)                         | **@jackpot51**
-| [Orbital (display server and window manager)](https://gitlab.redox-os.org/redox-os/orbital)                 | **@jackpot51**
-| This repo - the root of the Build System                                                                    | **@jackpot51** **@hatred_45**
-| [Redoxer (tool for easy Redox development on Linux)](https://gitlab.redox-os.org/redox-os/redoxer)          | **@jackpot51**
-| [The Redox Book](https://gitlab.redox-os.org/redox-os/book)                                                 | **@jackpot51** **@hatred_45**
-| [Website](https://gitlab.redox-os.org/redox-os/website)                                                     | **@jackpot51** **@hatred_45**
+```bash
+make qemu
+```
 
-## What it looks like
+`make qemu gpu=no` runs the image on the serial console, without a QEMU window. To build on the host instead of in a container, run `./native_bootstrap.sh` and set `PODMAN_BUILD=0`.
 
-See [Redox in Action](https://www.redox-os.org/screens/) for photos and videos.
+Common settings go in a `.config` file at the root of the tree, for example:
 
-<img alt="Redox" height="150" src="https://gitlab.redox-os.org/redox-os/website/-/raw/master/static/img/screenshot/orbital-visual.png">
-<img alt="Redox" height="150" src="https://gitlab.redox-os.org/redox-os/website/-/raw/master/static/img/screenshot/cosmic-programs.png">
-<img alt="Redox" height="150" src="https://gitlab.redox-os.org/redox-os/website/-/raw/master/static/img/screenshot/cosmic-term-screenfetch.png">
+```make
+CONFIG_NAME?=minimal
+ARCH?=x86_64
+```
 
-<img alt="Redox" height="150" src="https://gitlab.redox-os.org/redox-os/website/-/raw/master/static/img/screenshot/cosmic-edit-redox.png">
-<img alt="Redox" height="150" src="https://gitlab.redox-os.org/redox-os/website/-/raw/master/static/img/screenshot/image-viewer.png">
-<img alt="Redox" height="150" src="https://gitlab.redox-os.org/redox-os/assets/raw/master/screenshots/Boot.png">
+## Layout
+
+| Path | Purpose |
+|------|---------|
+| `src/` | The cookbook: the Rust tool (`repo`) that fetches, builds and packages recipes |
+| `recipes/` | One directory per package, each with a `recipe.toml` |
+| `recipes/wip/` | Recipes that are incomplete or untested |
+| `config/` | Image definitions |
+| `mk/`, `Makefile` | The make targets that drive the cookbook, the installer and QEMU |
+| `tests/` | Checks that run over every recipe and image definition |
+
+## Recipes
+
+A recipe says where the source comes from and how to build it:
+
+```toml
+[source]
+tar = "https://example.org/hello-1.0.tar.gz"
+blake3 = "<64 hex digits>"
+
+[build]
+template = "configure"
+dependencies = ["zlib"]
+```
+
+Recipes are validated strictly. An unknown key, a key that does not belong to the chosen source kind or build template, or a malformed hash is an error. `cargo test` checks every recipe in the tree.
+
+Useful commands:
+
+```bash
+make r.bash
+```
+
+```bash
+make c.bash
+```
+
+```bash
+./target/release/repo cook-list bash
+```
+
+The first builds one recipe, the second cleans it and the third shows what building it involves.
+
+## Developing the cookbook
+
+```bash
+cargo fmt
+```
+
+```bash
+cargo clippy --all-targets -- -D warnings
+```
+
+```bash
+cargo test
+```
+
+CI runs the same three commands. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+MIT. See [LICENSE](LICENSE), which retains the copyright notices of the Redox OS developers whose work this is built on.
