@@ -1,18 +1,23 @@
-# server variant meta-package
+# The user-level packages of the server image: everything config/server.toml
+# and config/minimal.toml list, without the core system from config/base.toml.
+# tests/recipes.rs checks that this list and those configs stay in step.
 [package]
 dependencies = [
     "bash",
     "bottom",
     "ca-certificates",
-    #"contain",
     "coreutils",
     "curl",
     "diffutils",
     "extrautils",
     "findutils",
+    "gettext",
     "git",
     "installer",
     "ion",
     "kibi",
+    "pkgutils",
+    "redoxfs",
+    "uutils-procps",
 ]
-description = "Server components"
+description = "Command-line packages of the server image"

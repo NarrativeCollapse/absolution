@@ -12,7 +12,6 @@ filesystem_size = 4096
 # Daemons
 openssh = {}
 nginx = {}
-rustysd = {}
 
 # Backends
 php84 = {}
@@ -32,7 +31,6 @@ sqlite3 = {}
 htop = {}
 
 # Content
-website = {}
 
 
 [[files]]
@@ -43,81 +41,54 @@ bash /root/keygen.sh
 """
 
 [[files]]
-path = "/usr/lib/init.d/99_rustysd"
+path = "/usr/lib/init.d/99_nginx.service"
 data = """
-requires_weak 98_keygen_sh
-# Undocumented usage of rsdctl, pointing to notifications dir
-RSDCTL_ADDR=/var/run/rustysd/control.socket rustysd --conf /etc/rustysd
+[unit]
+description = "nginx HTTP and reverse proxy server"
+requires_weak = ["10_net.target"]
+
+[service]
+cmd = "/usr/bin/nginx"
+args = ["-g", "daemon off;"]
+type = "oneshot_async"
 """
 
 [[files]]
-path = "/etc/rustysd/system/network-online.target"
+path = "/usr/lib/init.d/99_sshd.service"
 data = """
-[Unit]
-Description=The target after networks has online
+[unit]
+description = "OpenSSH server"
+requires_weak = ["10_net.target", "98_keygen_sh"]
 
-[Install]
-WantedBy=default.target
+[service]
+cmd = "/usr/bin/sshd"
+args = ["-D"]
+type = "oneshot_async"
 """
 
 [[files]]
-path = "/etc/rustysd/system/multi-user.target"
+path = "/usr/lib/init.d/99_php.service"
 data = """
-[Unit]
-Description=The target after user administrations has online
+[unit]
+description = "PHP built-in web server, behind nginx on port 8081"
+requires_weak = ["10_net.target"]
 
-[Install]
-WantedBy=default.target
+[service]
+# php-fpm does not work yet, so nginx proxies to PHP's built-in server.
+cmd = "/usr/bin/php"
+args = ["-S", "localhost:9000", "-t", "/var/www/html"]
+envs = { PWD = "/var/www/html" }
+type = "oneshot_async"
 """
 
 [[files]]
-path = "/etc/rustysd/system/nginx.service"
+path = "/var/www/default/index.html"
 data = """
-[Unit]
-Description=The nginx HTTP and reverse proxy server
-After=network-online.target
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/nginx -g "daemon off;"
-
-[Install]
-WantedBy=multi-user.target
-"""
-
-
-[[files]]
-path = "/etc/rustysd/system/ssh.service"
-data = """
-[Unit]
-Description=OpenBSD Secure Shell server
-After=network-online.target
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/sshd -D
-
-[Install]
-WantedBy=multi-user.target
-"""
-
-
-
-[[files]]
-path = "/etc/rustysd/system/php.service"
-data = """
-[Unit]
-Description=OpenBSD Secure Shell server
-After=network-online.target
-
-[Service]
-Type=simple
-# currently php-fpm not that quite work
-ExecStart=env PWD=/var/www/html php -S localhost:9000
-# ExecStart=/usr/bin/php-fpm --fpm-config /etc/php/84/php-fpm.conf  --nodaemonize
-
-[Install]
-WantedBy=multi-user.target
+<!doctype html>
+<title>Absolution</title>
+<h1>Absolution</h1>
+<p>nginx is serving this page from /var/www/default.
+PHP is on port 8081.</p>
 """
 
 [[files]]
@@ -125,7 +96,7 @@ path = "/var/www/html/index.php"
 data = """
 <?php
 
-echo "Hello from PHP on Redox!";
+echo "Hello from PHP on Absolution!";
 """
 
 [[files]]
@@ -185,7 +156,7 @@ data = """
 server {
     listen       80;
     server_name  localhost;
-    root   /usr/share/website;
+    root   /var/www/default;
     absolute_redirect off;
 
     location / {
@@ -210,7 +181,7 @@ server {
     }
 
     location ~ \\.php$ {
-# because we're not using PHP FPM (see rustysd php.service)
+# PHP FPM does not work yet, see 99_php.service
 #       include fastcgi_params;
 #       fastcgi_pass 127.0.0.1:9000;
 #       fastcgi_index index.php;
@@ -277,33 +248,32 @@ fi
 [[files]]
 path = "/home/user/server.sh"
 data = """
-#!/usr/bin/env bash
+#!/bin/sh
+# Start the demo daemons by hand, if init did not.
 
-/bin/sshd -D &
-nginx -g "daemon off;" &
-php-fpm --nodaemonize &
+/usr/bin/sshd -D &
+/usr/bin/nginx -g "daemon off;" &
+/usr/bin/php -S localhost:9000 -t /var/www/html &
 """
 
 [[files]]
 path = "/home/user/Welcome.txt"
 data = """
 ##############################################################################
-# Welcome to Redox Server Demo!
+# Welcome to the Absolution server demo!
 #
-# This is a quick demonstration of Redox used as server stack.
+# This is a quick demonstration of Absolution used as a server stack.
 # At the moment we support SSH, NGINX, Python, PHP. There's more to come
 #
 # This server demo is insecure by design, we encourage you to get familiar into
 #   basics of server security if you wish to use this as a production server.
 #
-# There should be rustysd already running, if not, you can try start it manually
-# > sudo rustysd --conf /etc/rustysd
-#
-# You can also try running all daemons manually
-# > sudo bash server.sh
+# init starts sshd, nginx and PHP at boot. If they are not running, start
+#   them manually:
+# > sudo sh server.sh
 #
 # The server will start port 22 (ssh), 80 (static web) and 8081 (php)
-# If you use the Redox OS build system, starting QEMU with `net=redir`
+# If you use the build system, starting QEMU with `net=redir`
 #   should expose those port to 8022, 8080 and 8081.
 # Try logging in to console via SSH with `ssh user@localhost -p 8022`
 #

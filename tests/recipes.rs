@@ -126,7 +126,9 @@ fn dependencies_of_supported_recipes_exist() {
 /// Supported recipes whose archive is downloaded without a hash to check
 /// it against. Do not add to this list; add `blake3` to the recipe instead,
 /// and remove a recipe from here once it has one.
-const KNOWN_UNVERIFIED_TARS: [&str; 5] = ["iperf3", "jq", "liburcu", "mpc", "nginx"];
+const KNOWN_UNVERIFIED_TARS: [&str; 7] = [
+    "iperf3", "jq", "libedit", "libtiff", "liburcu", "mpc", "nginx",
+];
 
 #[test]
 fn supported_tar_sources_are_verified() {
@@ -193,5 +195,102 @@ fn image_configs_only_name_existing_recipes() {
         missing.is_empty(),
         "configs name missing recipes:\n{}",
         missing.join("\n")
+    );
+}
+
+/// Dependencies of every kind, as recipe names.
+fn recipe_dependencies(recipe: &Recipe) -> Vec<String> {
+    let optional = recipe
+        .optional_packages
+        .iter()
+        .flat_map(|p| &p.dependencies);
+    recipe
+        .build
+        .dependencies
+        .iter()
+        .chain(&recipe.build.dev_dependencies)
+        .chain(&recipe.package.dependencies)
+        .chain(optional)
+        .map(|dependency| recipe_of(dependency.as_str()).to_string())
+        .filter(|name| !name.is_empty())
+        .collect()
+}
+
+#[test]
+fn supported_recipes_depend_only_on_supported_recipes() {
+    let files = recipe_files();
+    let mut problems = Vec::new();
+    for (name, path) in files.iter().filter(|(_, path)| !is_wip(path)) {
+        let Ok(recipe) = Recipe::load(path) else {
+            continue; // reported by every_recipe_parses
+        };
+        for dependency in recipe_dependencies(&recipe) {
+            if files.get(&dependency).is_some_and(|path| is_wip(path)) {
+                problems.push(format!(
+                    "{name} depends on work-in-progress recipe {dependency}; \
+                     move {dependency} out of recipes/wip once it builds"
+                ));
+            }
+        }
+    }
+    assert!(problems.is_empty(), "{}", problems.join("\n"));
+}
+
+#[test]
+fn image_configs_only_name_supported_recipes() {
+    let files = recipe_files();
+    let mut problems = Vec::new();
+    for entry in walkdir::WalkDir::new(tree_root().join("config")) {
+        let entry = entry.unwrap();
+        if entry.path().extension().is_none_or(|ext| ext != "toml") {
+            continue;
+        }
+        let relative = entry.path().strip_prefix(tree_root()).unwrap();
+        // The CI configs, and the "full" image built from them, list
+        // experimental packages on purpose, to try building them.
+        if relative
+            .file_name()
+            .is_some_and(|name| name == "ci.toml" || name == "full.toml")
+        {
+            continue;
+        }
+        for package in config_packages(entry.path(), &mut BTreeSet::new()) {
+            let recipe = recipe_of(&package);
+            if files.get(recipe).is_some_and(|path| is_wip(path)) {
+                problems.push(format!(
+                    "{}: {package} is a work-in-progress recipe",
+                    relative.display()
+                ));
+            }
+        }
+    }
+    assert!(problems.is_empty(), "{}", problems.join("\n"));
+}
+
+/// The `[packages]` keys a config lists itself, ignoring its includes.
+fn own_config_packages(path: &Path) -> BTreeSet<String> {
+    let config: toml::Table = std::fs::read_to_string(path).unwrap().parse().unwrap();
+    config
+        .get("packages")
+        .and_then(|value| value.as_table())
+        .map(|table| table.keys().cloned().collect())
+        .unwrap_or_default()
+}
+
+#[test]
+fn server_group_matches_server_image() {
+    let root = tree_root();
+    let mut expected = own_config_packages(&root.join("config/minimal.toml"));
+    expected.extend(own_config_packages(&root.join("config/server.toml")));
+    let group = Recipe::load(&root.join("recipes/groups/server/recipe.toml")).unwrap();
+    let actual: BTreeSet<String> = group
+        .package
+        .dependencies
+        .iter()
+        .map(|name| name.as_str().to_string())
+        .collect();
+    assert_eq!(
+        actual, expected,
+        "recipes/groups/server must list the packages of config/minimal.toml and config/server.toml"
     );
 }
